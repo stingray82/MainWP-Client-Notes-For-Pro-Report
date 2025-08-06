@@ -6,8 +6,8 @@ namespace MainWP\Dashboard;
  */
 class MainWP_Work_Notes {
 
-    const CLEANUP_REMOVE_MIGRATION_LOGIC_VERSION = '1.2.8';
-    const CLEANUP_DELETE_LEGACY_OPTIONS_VERSION = '1.3.0';
+    const CLEANUP_REMOVE_MIGRATION_LOGIC_VERSION = '1.3.2';
+    const CLEANUP_DELETE_LEGACY_OPTIONS_VERSION = '1.3.4';
 
     /**
      * Initialize plugin hooks.

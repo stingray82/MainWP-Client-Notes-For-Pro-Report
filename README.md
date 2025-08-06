@@ -32,7 +32,7 @@ This plugin allows you to add work notes and client notes on a **per-site basis*
 
 ---
 
-## ✨ New in v1.2.6
+## ✨ Comming in v1.3.0
 
 -  Notes are now saved to a **dedicated database table** (`wp_mainwp_work_notes`) for better scalability and performance.
 - **Flatpickr** date selector with localized display format.
