@@ -4,7 +4,7 @@ Donate link: https://reallyusefulplugins.com/donate
 Tags: MainWP, ClientNotes, Pro-report
 Requires at least: 6.5
 Tested up to: 6.8.2
-Stable tag: 1.2.5-beta.3
+Stable tag: 1.2.5-rc
 Requires PHP: 7.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -25,6 +25,7 @@ Install on your dashboard within client sites you will now have a new area to ad
 1.2.5
 New: Added Support for Preleases
 New: Updated UUPD to 1.3.0
+
 
 1.2.4 
 - Added support for editing Work Notes using the WordPress visual editor (TinyMCE), enabling rich text formatting.
