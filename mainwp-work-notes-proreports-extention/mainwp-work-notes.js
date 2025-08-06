@@ -85,6 +85,20 @@ jQuery(document).ready(function ($) {
         });
     }
 
+    jQuery(document).ready(function ($) {
+    if (typeof flatpickr !== 'undefined') {
+        flatpickr("#work_notes_date", {
+            dateFormat: "Y-m-d", // This is the value that will be submitted
+            altInput: true,
+            altFormat: mainwpWorkNotes.date_format || "d/m/Y", // WP display format
+            defaultDate: $("#work_notes_date").val(),
+            allowInput: true // optional: lets user type in date manually
+        });
+    }
+});
+
+
+
 
     function resetForm() {
         $('input[name="note_id"]').val('-1'); // ensure new notes work

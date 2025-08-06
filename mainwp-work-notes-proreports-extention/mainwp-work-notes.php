@@ -21,14 +21,40 @@ class MainWP_Work_Notes {
 
     // Load WordPress editor and custom JavaScript
     public static function enqueue_assets() {
-        wp_enqueue_editor(); // Enables TinyMCE
-        wp_enqueue_script('mainwp-work-notes-js', plugins_url('mainwp-work-notes.js', __FILE__), array('jquery'), null, true);
+    wp_enqueue_editor(); // TinyMCE
 
-        wp_localize_script('mainwp-work-notes-js', 'mainwpWorkNotes', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce'    => wp_create_nonce('work_notes_nonce')
+    // Flatpickr CSS & JS
+    wp_enqueue_style('flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css');
+    wp_enqueue_script('flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr', array(), null, true);
+
+    wp_enqueue_script('mainwp-work-notes-js', plugins_url('mainwp-work-notes.js', __FILE__), array('jquery', 'flatpickr-js'), null, true);
+
+    wp_localize_script('mainwp-work-notes-js', 'mainwpWorkNotes', array(
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'nonce'    => wp_create_nonce('work_notes_nonce'),
+        'date_format' => self::get_js_date_format(), // We'll define this
         ));
     }
+
+
+    private static function get_js_date_format() {
+        $php_format = get_option('date_format'); // e.g., 'F j, Y'
+
+        // Map PHP date format to Flatpickr-compatible format
+        $replacements = array(
+            'F' => 'F',   // Full month name
+            'M' => 'M',   // Short month name
+            'm' => 'm',   // 2-digit month
+            'n' => 'n',   // 1 or 2-digit month
+            'd' => 'd',   // 2-digit day
+            'j' => 'j',   // 1 or 2-digit day
+            'Y' => 'Y',   // 4-digit year
+            'y' => 'y',   // 2-digit year
+        );
+
+        return strtr($php_format, $replacements);
+    }
+
 
     // Add Work Notes tab to each child site
     public static function add_sub_menu($subArray) {
@@ -101,7 +127,8 @@ class MainWP_Work_Notes {
             <tbody>
             <?php foreach ($notes as $index => $note) : ?>
                 <tr data-note-id="<?php echo esc_attr($index); ?>">
-                    <td><?php echo esc_html($note['date']); ?></td>
+                    <?php $formatted_date = date_i18n(get_option('date_format'), strtotime($note['date'])); ?>
+                    <td><?php echo esc_html($formatted_date); ?></td>
                     <td><?php echo wp_kses_post($note['content']); ?></td>
                     <td>
                         <button class="ui button blue edit-note" data-note-id="<?php echo esc_attr($index); ?>">Edit</button>
@@ -138,7 +165,9 @@ class MainWP_Work_Notes {
     echo '<tbody>'; // FIX: wrap the rows in <tbody>
     foreach ($notes as $index => $note) {
         echo '<tr data-note-id="' . esc_attr($index) . '">';
-        echo '<td>' . esc_html($note['date']) . '</td>';
+        $formatted_date = date_i18n(get_option('date_format'), strtotime($note['date']));
+        echo '<td>' . esc_html($formatted_date) . '</td>';
+
         echo '<td>' . wp_kses_post($note['content']) . '</td>';
         echo '<td>
                 <button class="ui button blue edit-note" data-note-id="' . esc_attr($index) . '">Edit</button>
@@ -233,7 +262,13 @@ class MainWP_Work_Notes {
         echo '<form id="work-notes-form" class="ui form" style="padding: 20px; max-width: 95%; margin: 0 auto;">';
         echo '<input type="hidden" name="wpid" value="' . esc_attr($current_wpid) . '">';
         echo '<input type="hidden" name="note_id" value="-1">';
-        echo '<div class="field"><label for="work_notes_date">Work Date:</label><input type="date" name="work_notes_date" required style="width: 100%;"></div>';
+        //echo '<input type="text" id="work_notes_date" name="work_notes_date" value="' . esc_attr($current_date) . '" required style="width: 100%;">';
+
+        // Testing date
+        $current_date = current_time('Y-m-d');
+        echo '<div class="field"><label for="work_notes_date">Work Date:</label>';
+        echo '<input type="text" id="work_notes_date" name="work_notes_date" value="' . esc_attr($current_date) . '" required style="width: 100%;"></div>';
+
         echo '<div class="field"><label for="work_notes_content">Work Details:</label>';
         ob_start();
         wp_editor('', 'work_notes_content', array(
@@ -253,7 +288,9 @@ class MainWP_Work_Notes {
         echo '<table class="ui celled table"><thead><tr><th>Date</th><th>Details</th><th>Actions</th></tr></thead><tbody>';
         foreach ($notes as $index => $note) {
             echo '<tr>';
-            echo '<td>' . esc_html($note['date']) . '</td>';
+            $formatted_date = date_i18n(get_option('date_format'), strtotime($note['date']));
+            echo '<td>' . esc_html($formatted_date) . '</td>';
+
             echo '<td>' . wp_kses_post($note['content']) . '</td>';
             echo '<td>
                     <button class="ui button blue edit-note" data-note-id="' . esc_attr($index) . '">Edit</button>
@@ -308,7 +345,8 @@ class MainWP_Work_Notes_Pro_Reports {
             $output .= '<tbody>';
             foreach ($work_notes as $note) {
                 $output .= '<tr>';
-                $output .= '<td>' . esc_html($note['date']) . '</td>';
+                $formatted_date = date_i18n(get_option('date_format'), strtotime($note['date']));
+                $output .= '<td>' . esc_html($formatted_date) . '</td>';
                 $output .= '<td>' . wp_kses_post($note['content']) . '</td>';  // updated to show formatted HTML
                 $output .= '</tr>';
             }
