@@ -6,6 +6,9 @@ namespace MainWP\Dashboard;
  */
 class MainWP_Work_Notes {
 
+    const CLEANUP_REMOVE_MIGRATION_LOGIC_VERSION = '1.2.8';
+    const CLEANUP_DELETE_LEGACY_OPTIONS_VERSION = '1.3.0';
+
     /**
      * Initialize plugin hooks.
      */
@@ -25,17 +28,40 @@ class MainWP_Work_Notes {
         // DB table creation
         register_activation_hook(__FILE__, [__CLASS__, 'create_work_notes_table']);
 
+
+        /**
+         * 
+         *  Delete from version 1.3.1 onwards This is a future clean up logic
+         * 
+         */
+
         /**
          * === Migration Hooks (Temporary, can be removed in a future version) ===
          * Delay check until after pluggable functions are available
          */
         add_action('admin_init', function () {
-            if (!get_option('mainwp_work_notes_migrated') && current_user_can('manage_options')) {
-                self::maybe_auto_migrate_legacy_notes();
-            }
-        });
+        // Only run if we're in admin and can manage
+        if (!is_admin() || !current_user_can('manage_options')) {
+            return;
+        }
 
-    }
+        // Handle first-run migration (until 1.2.8)
+        if (
+            version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_REMOVE_MIGRATION_LOGIC_VERSION, '<') &&
+            !get_option('mainwp_work_notes_migrated')
+        ) {
+            self::maybe_auto_migrate_legacy_notes();
+        }
+
+        // Cleanup legacy options in 1.3.0+
+        if (
+            version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_DELETE_LEGACY_OPTIONS_VERSION, '>=') &&
+            get_option('mainwp_work_notes_migrated')
+        ) {
+            self::maybe_delete_legacy_options();
+        }
+    });       
+      
 
 
 
@@ -120,6 +146,20 @@ class MainWP_Work_Notes {
 
         wp_send_json_error(['message' => 'Migration class not found.']);
     } 
+
+     //Legacy Clean up
+    public static function maybe_delete_legacy_options() {
+    global $wpdb;
+
+    $prefix = 'mainwp_work_notes_%';
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $prefix
+        )
+    );
+}
+
 
     
 

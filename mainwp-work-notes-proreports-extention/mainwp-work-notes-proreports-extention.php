@@ -234,6 +234,7 @@ $mainwpclientnotesproreportExtensionActivator = new MainWP_Client_Pro_Report_Not
 // Define plugin constants
 define('RUP_MAINWP_CLIENT_NOTES_VERSION', '1.2.5');
 
+
 // ──────────────────────────────────────────────────────────────────────────
 //  Updater bootstrap (plugins_loaded priority 1):
 // ──────────────────────────────────────────────────────────────────────────
