@@ -31,18 +31,33 @@ class MainWP_Work_Notes {
          */
         add_action('admin_init', function () {
             if (!get_option('mainwp_work_notes_migrated') && current_user_can('manage_options')) {
-                add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_migration_js']);
-                add_action('admin_bar_menu', [__CLASS__, 'maybe_add_migration_toolbar_link'], 100);
-                add_action('wp_ajax_mainwp_migrate_work_notes', [__CLASS__, 'ajax_migrate_work_notes']);
+                self::maybe_auto_migrate_legacy_notes();
             }
         });
+
     }
 
 
 
     /**
-         * === Migration Logic (Temporary, can be removed in a future version) ===
-         */
+    * === Migration Logic (Temporary, can be removed in a future version) ===
+    */
+
+
+    private static function maybe_auto_migrate_legacy_notes() {
+        self::create_work_notes_table();
+        global $wpdb;
+        $legacy_notes_exist = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'mainwp_work_notes_%'");
+        if ($legacy_notes_exist > 0) {
+            self::migrate_work_notes_to_db();
+        }
+        update_option('mainwp_work_notes_migrated', true);
+
+        add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_migration_js']);
+        add_action('admin_bar_menu', [__CLASS__, 'maybe_add_migration_toolbar_link'], 100);
+        add_action('wp_ajax_mainwp_migrate_work_notes', [__CLASS__, 'ajax_migrate_work_notes']);
+    }
+
 
     /**
      * Show migration button in admin bar if migration hasn't run.
