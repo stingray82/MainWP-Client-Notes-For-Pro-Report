@@ -1,22 +1,23 @@
 1.2.6  
-New:  
-- Migration system to move existing Work Notes from wp_options to a dedicated database table (wp_mainwp_work_notes)  
-- Admin toolbar button to trigger migration (only visible to admins if migration hasn't yet run)  
-- Support for Flatpickr-powered date selection with WordPress-compatible display format  
-- Automatically populate today’s date when creating a new note  
+New:
+- Migration system to move existing Work Notes from wp_options to a dedicated database table (wp_mainwp_work_notes)
+- Admin toolbar button to trigger migration (only visible to admins if migration hasn't yet run)
+- Support for Flatpickr-powered date selection with WordPress-compatible display format
+- Automatically populate today’s date when creating a new note
+- Version-based logic to clean up legacy data and remove migration code in future versions
 
-Changed:  
-- Work Notes are now saved, retrieved, and displayed from a dedicated database table for performance and scalability  
-- JS form handling improved:  
-  - Notes load correctly into the editor and date field when editing  
-  - Form resets after save with today's date pre-filled  
-  - Save button label dynamically changes between "Save Note" and "Update Note" based on context  
+Changed:
+- Work Notes are now saved, retrieved, and displayed from a dedicated database table for performance and scalability
+- JS form handling improved:
+  - Notes load correctly into the editor and date field when editing
+  - Form resets after save with today's date pre-filled
+  - Save button label dynamically changes between "Save Note" and "Update Note" based on context
 
-Clean-up:  
-- Migration logic grouped and documented for future removal  
-- Date picker logic centralized and fallback-safe  
-- Enhanced UI interactivity with better error handling and feedback  
-
+Clean-up:
+- Migration logic grouped and documented for future removal in v1.2.8
+- Legacy wp_options notes will be removed automatically in v1.3.0+
+- Date picker logic centralized and fallback-safe
+- Enhanced UI interactivity with better error handling and feedback
 
 
 1.2.5

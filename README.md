@@ -1,64 +1,58 @@
-MainWP-Client-Notes-For-Pro-Report
-==================================
+# MainWP-Client-Notes-For-Pro-Report
 
-![](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Extention.png)
+![MainWP Work Notes](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Extention.png)
 
-**Please Note: A prerequisite of this plugin is pro-reports**
+> **Note:** This extension requires **MainWP Pro Reports**.
 
- 
+---
 
-Whats it do?
-------------
+## What’s It Do?
 
-Allows you to add work notes and clients notes based on date range to your
-client reports on a site by site basis.
+This plugin allows you to add work notes and client notes on a **per-site basis**, filtered by date range, and automatically included in your **MainWP Pro Reports** using a special token.
 
- 
+---
 
-Usage Instructions:
+## Usage Instructions
 
-1. Add extension to site
+1. **Install the Extension**  
+   ![Installed](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Installed.png)
 
-![](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Installed.png)
+2. **Access "Work Notes" from a Child Site Menu**  
+   ![Menu Item](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Additional_Menu_Item.png)
 
-2. Then you get an additional menu item when looking at a child site
+3. **Open the Work Notes Page**  
+   ![Work Notes Page](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Screen.png)
 
-![](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Additional_Menu_Item.png)
+4. **Add Your Notes and Use the Token**  
+   Use `[client.customwork.notes]` in your Pro Report template to include these notes in client-facing reports.  
+   ![Example Code](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Example_code_in_use.png)
 
-3. Which opens a new page:
+5. **Your Notes Render in the Final Report**  
+   ![Rendered Code](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Rendered_Code.png)
 
-![](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Screen.png)
+---
 
-4. You can then use the new [client.customwork.notes] token to show these in
-your report and it would pull and display those based on the date range of the
-report liek this
+## ✨ New in v1.2.6
 
-![](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Example_code_in_use.png)
+-  Notes are now saved to a **dedicated database table** (`wp_mainwp_work_notes`) for better scalability and performance.
+- **Flatpickr** date selector with localized display format.
+- Automatically populates today's date when creating a new note.
+- Dynamic "Save Note" / "Update Note" button based on context.
+- Seamless **automatic migration** of existing notes from `wp_options`.
+- **Admin bar fallback** allows manual migration trigger if needed.
+- Future-proof cleanup logic to remove legacy data in v1.3.0+.
 
-5. Which renders this in the final report
+---
 
-![](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Rendered_Code.png)
+## ⚠️ Heads-Up
 
- 
+This originally started as a proof of concept. The core functionality is solid, but here are some known limitations or enhancements that are now *mostly resolved*:
 
- 
+~1. Getting it to render as a sidepage rather than a new page~ ✅  
+~2. Add a primary key to the notes to allow better editing to prevent duplicates~ ✅
 
-WARNING: This is a proof of concept and does need some additional work done;
+But if you spot any quirks or have ideas for improvements — contributions welcome!
 
-Known issues to resolve
-
- 
-
-1.  Getting it to render as a sidepage rather than a new page
-
-2.  Add a primary key to the notes to allow better editing to prevent duplicates
-
- 
-
-But for its primary function it may not be slick but it functions as designed.
-
- 
-
-Feel free to fix the above two issues :)
+---
 
  
