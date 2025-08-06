@@ -4,7 +4,7 @@
  * Description:       This adds client notes to your pro report
  * Tested up to:      6.8.2
  * Requires at least: 6.5
- * Requires PHP:      7.4
+ * Requires PHP:      8.0
  * Version:           1.2.5
  * Author:            reallyusefulplugins.com
  * Author URI:        https://reallyusefulplugins.com
