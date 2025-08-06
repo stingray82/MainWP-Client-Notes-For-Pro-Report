@@ -1,8 +1,7 @@
 jQuery(document).ready(function ($) {
     function fixDatePicker() {
-        var dateInput = $('input[name="work_notes_date"]');
-        dateInput.focus();
-        dateInput.blur();
+        const dateInput = $('input[name="work_notes_date"]');
+        dateInput.focus().blur();
     }
 
     function renderNoteRow(index, note) {
@@ -25,12 +24,21 @@ jQuery(document).ready(function ($) {
             $.post(mainwpWorkNotes.ajax_url, {
                 action: 'load_work_note',
                 nonce: mainwpWorkNotes.nonce,
-                wpid: wpid,
+                wpid,
                 note_id: noteId
             }, function (response) {
                 if (response.success) {
                     $('input[name="note_id"]').val(noteId);
-                    $('input[name="work_notes_date"]').val(response.data.date);
+                    
+                    // ✅ Set button to "Update"
+                    $('#save-work-note').text('Update Work Note');
+
+                    // Set date
+                    if (window.workNotesFlatpickrInstance) {
+                        window.workNotesFlatpickrInstance.setDate(response.data.date, true);
+                    } else {
+                        $('input[name="work_notes_date"]').val(response.data.date);
+                    }
 
                     const editor = tinyMCE.get('work_notes_content');
                     if (editor) {
@@ -55,7 +63,7 @@ jQuery(document).ready(function ($) {
             $.post(mainwpWorkNotes.ajax_url, {
                 action: 'delete_work_note',
                 nonce: mainwpWorkNotes.nonce,
-                wpid: wpid,
+                wpid,
                 note_id: noteId
             }, function (response) {
                 if (response.success) {
@@ -75,34 +83,28 @@ jQuery(document).ready(function ($) {
             nonce: mainwpWorkNotes.nonce,
             site_id: wpid
         }, function (response) {
-            console.log("Reload AJAX response:", response);
-            if (response.success && response.data && response.data.html) {
+            if (response.success && response.data?.html) {
                 $('.ui.celled.table tbody').replaceWith(response.data.html);
-                bindWorkNotesEvents(); // Re-bind handlers
+                bindWorkNotesEvents(); // Rebind events for new DOM
             } else {
                 alert(response.data?.message || 'Failed to reload notes.');
             }
         });
     }
 
-    jQuery(document).ready(function ($) {
-    if (typeof flatpickr !== 'undefined') {
-        flatpickr("#work_notes_date", {
-            dateFormat: "Y-m-d", // This is the value that will be submitted
-            altInput: true,
-            altFormat: mainwpWorkNotes.date_format || "d/m/Y", // WP display format
-            defaultDate: $("#work_notes_date").val(),
-            allowInput: true // optional: lets user type in date manually
-        });
-    }
-});
-
-
-
-
     function resetForm() {
-        $('input[name="note_id"]').val('-1'); // ensure new notes work
-        $('input[name="work_notes_date"]').val('');
+        $('input[name="note_id"]').val('-1');
+
+        // ✅ Set button label back to "Save"
+        $('#save-work-note').text('Save Work Note');
+
+        // Reset date to today
+        if (mainwpWorkNotes.today && window.workNotesFlatpickrInstance) {
+            window.workNotesFlatpickrInstance.setDate(mainwpWorkNotes.today, true);
+        } else {
+            $('input[name="work_notes_date"]').val(mainwpWorkNotes.today || '');
+        }
+
         const editor = tinyMCE.get('work_notes_content');
         if (editor) {
             editor.setContent('');
@@ -119,7 +121,7 @@ jQuery(document).ready(function ($) {
         $.post(mainwpWorkNotes.ajax_url, {
             action: 'save_work_note',
             nonce: mainwpWorkNotes.nonce,
-            wpid: wpid,
+            wpid,
             note_id: noteId,
             work_notes_date: $('input[name="work_notes_date"]').val(),
             work_notes_content: content
@@ -127,12 +129,22 @@ jQuery(document).ready(function ($) {
             if (response.success) {
                 alert(response.data.message);
                 reloadNotesTable(wpid);
-                resetForm();
+                resetForm(); // ✅ this also resets the button label
             } else {
                 alert(response.data.message);
             }
         });
     });
+
+    if (typeof flatpickr !== 'undefined') {
+        window.workNotesFlatpickrInstance = flatpickr("#work_notes_date", {
+            dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: mainwpWorkNotes.date_format || "d/m/Y",
+            defaultDate: $("#work_notes_date").val(),
+            allowInput: true
+        });
+    }
 
     fixDatePicker();
     bindWorkNotesEvents();

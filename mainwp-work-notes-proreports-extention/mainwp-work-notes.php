@@ -1,381 +1,461 @@
 <?php
 namespace MainWP\Dashboard;
 
+/**
+ * Handles Work Notes functionality: UI, DB storage, AJAX, and migration.
+ */
 class MainWP_Work_Notes {
 
-    // Initialize all hooks
+    /**
+     * Initialize plugin hooks.
+     */
     public static function init() {
-        // Add a submenu tab for Work Notes under each child site
-        add_filter('mainwp_getsubpages_sites', array(__CLASS__, 'add_sub_menu'), 10, 1);
+        // Add subpage for each child site
+        add_filter('mainwp_getsubpages_sites', [__CLASS__, 'add_sub_menu'], 10, 1);
 
-        // Enqueue required scripts and editor
-        add_action('admin_enqueue_scripts', array(__CLASS__, 'enqueue_assets'));
+        // Enqueue assets
+        add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
 
-        // Register AJAX handlers
-        add_action('wp_ajax_save_work_note', array(__CLASS__, 'ajax_save_work_note_action'));
-        add_action('wp_ajax_delete_work_note', array(__CLASS__, 'ajax_delete_work_note_action'));
-        add_action('wp_ajax_load_work_note', array(__CLASS__, 'ajax_load_work_note_action'));
-        add_action('wp_ajax_load_work_notes_form', array(__CLASS__, 'ajax_load_work_notes_form'));
+        // Core AJAX handlers
+        add_action('wp_ajax_save_work_note', [__CLASS__, 'ajax_save_work_note_action']);
+        add_action('wp_ajax_delete_work_note', [__CLASS__, 'ajax_delete_work_note_action']);
+        add_action('wp_ajax_load_work_note', [__CLASS__, 'ajax_load_work_note_action']);
+        add_action('wp_ajax_load_work_notes_form', [__CLASS__, 'ajax_load_work_notes_form']);
 
-    }
+        // DB table creation
+        register_activation_hook(__FILE__, [__CLASS__, 'create_work_notes_table']);
 
-    // Load WordPress editor and custom JavaScript
-    public static function enqueue_assets() {
-    wp_enqueue_editor(); // TinyMCE
-
-    // Flatpickr CSS & JS
-    wp_enqueue_style('flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css');
-    wp_enqueue_script('flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr', array(), null, true);
-
-    wp_enqueue_script('mainwp-work-notes-js', plugins_url('mainwp-work-notes.js', __FILE__), array('jquery', 'flatpickr-js'), null, true);
-
-    wp_localize_script('mainwp-work-notes-js', 'mainwpWorkNotes', array(
-        'ajax_url' => admin_url('admin-ajax.php'),
-        'nonce'    => wp_create_nonce('work_notes_nonce'),
-        'date_format' => self::get_js_date_format(), // We'll define this
-        ));
+        /**
+         * === Migration Hooks (Temporary, can be removed in a future version) ===
+         * Delay check until after pluggable functions are available
+         */
+        add_action('admin_init', function () {
+            if (!get_option('mainwp_work_notes_migrated') && current_user_can('manage_options')) {
+                add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_migration_js']);
+                add_action('admin_bar_menu', [__CLASS__, 'maybe_add_migration_toolbar_link'], 100);
+                add_action('wp_ajax_mainwp_migrate_work_notes', [__CLASS__, 'ajax_migrate_work_notes']);
+            }
+        });
     }
 
 
-    private static function get_js_date_format() {
-        $php_format = get_option('date_format'); // e.g., 'F j, Y'
 
-        // Map PHP date format to Flatpickr-compatible format
-        $replacements = array(
-            'F' => 'F',   // Full month name
-            'M' => 'M',   // Short month name
-            'm' => 'm',   // 2-digit month
-            'n' => 'n',   // 1 or 2-digit month
-            'd' => 'd',   // 2-digit day
-            'j' => 'j',   // 1 or 2-digit day
-            'Y' => 'Y',   // 4-digit year
-            'y' => 'y',   // 2-digit year
-        );
+    /**
+         * === Migration Logic (Temporary, can be removed in a future version) ===
+         */
 
-        return strtr($php_format, $replacements);
+    /**
+     * Show migration button in admin bar if migration hasn't run.
+     */
+    public static function maybe_add_migration_toolbar_link($wp_admin_bar) {
+        if (!current_user_can('manage_options') || get_option('mainwp_work_notes_migrated')) return;
+
+        $wp_admin_bar->add_node([
+            'id'    => 'mainwp_migrate_notes',
+            'title' => 'Migrate Work Notes',
+            'href'  => '#',
+            'meta'  => ['title' => 'Migrate Work Notes', 'class' => 'mainwp-migrate-notes-toolbar']
+        ]);
     }
 
+    /**
+     * Enqueue JS to handle migration button click.
+     */
+    public static function enqueue_migration_js() {
+        if (!current_user_can('manage_options') || get_option('mainwp_work_notes_migrated')) return;
 
-    // Add Work Notes tab to each child site
+        wp_add_inline_script('jquery-core', "
+            jQuery(document).ready(function($) {
+                $('.mainwp-migrate-notes-toolbar a').on('click', function(e) {
+                    e.preventDefault();
+                    if (!confirm('Are you sure you want to migrate existing work notes to the database?')) return;
+
+                    $.post(ajaxurl, {
+                        action: 'mainwp_migrate_work_notes',
+                        nonce: '" . wp_create_nonce('work_notes_migrate') . "'
+                    }, function(response) {
+                        if (response.success) {
+                            alert(response.data.message);
+                            location.reload();
+                        } else {
+                            alert('Migration failed: ' + response.data.message);
+                        }
+                    });
+                });
+            });
+        ");
+    }
+
+    /**
+     * Handle AJAX-based work note migration.
+     */
+    public static function ajax_migrate_work_notes() {
+        check_ajax_referer('work_notes_migrate', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Permission denied']);
+        }
+
+        // Call static migrate method from work notes class
+        if (class_exists('\MainWP\Dashboard\MainWP_Work_Notes')) {
+            \MainWP\Dashboard\MainWP_Work_Notes::migrate_work_notes_to_db();
+            update_option('mainwp_work_notes_migrated', true);
+            wp_send_json_success(['message' => 'Work notes migrated successfully.']);
+        }
+
+        wp_send_json_error(['message' => 'Migration class not found.']);
+    } 
+
+    
+
+    /**
+     * === End of Migration Logic ===
+     */
+
+
+
+
+
+
+    /**
+     * Create the custom database table for storing work notes.
+     */
+    public static function create_work_notes_table() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'mainwp_work_notes';
+        $charset = $wpdb->get_charset_collate();
+
+        $sql = "CREATE TABLE IF NOT EXISTS $table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            site_id BIGINT UNSIGNED NOT NULL,
+            work_date DATE NOT NULL,
+            content LONGTEXT NOT NULL,
+            timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            INDEX (site_id),
+            INDEX (work_date)
+        ) $charset;";
+
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        dbDelta($sql);
+    }
+
+    /**
+     * Migrate old work notes from wp_options into the dedicated database table.
+     */
+    public static function migrate_work_notes_to_db() {
+    global $wpdb;
+
+    // Ensure table exists before inserting data
+    self::create_work_notes_table();
+
+    $prefix = 'mainwp_work_notes_';
+    $table = $wpdb->prefix . 'mainwp_work_notes';
+    $options = $wpdb->get_results("SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE '{$prefix}%'");
+
+    foreach ($options as $option) {
+        $site_id = (int) str_replace($prefix, '', $option->option_name);
+        $notes = maybe_unserialize($option->option_value);
+
+        if (!is_array($notes)) continue;
+
+        foreach ($notes as $note) {
+            if (empty($note['date']) || empty($note['content'])) continue;
+
+            // Prevent duplicate migrations
+            $exists = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM $table WHERE site_id = %d AND work_date = %s AND content = %s",
+                $site_id, $note['date'], $note['content']
+            ));
+
+            if (!$exists) {
+                $wpdb->insert($table, [
+                    'site_id'   => $site_id,
+                    'work_date' => sanitize_text_field($note['date']),
+                    'content'   => wp_kses_post($note['content']),
+                    'timestamp' => isset($note['timestamp']) ? date('Y-m-d H:i:s', $note['timestamp']) : current_time('mysql'),
+                ]);
+            }
+        }
+    }
+}
+
+
+    /**
+     * Add "Work Notes" tab to each child site.
+     */
     public static function add_sub_menu($subArray) {
-        $subArray[] = array(
+        $subArray[] = [
             'title' => 'Work Notes',
-            'slug'  => 'WorkNotes',
-            'sitetab'  => true,
+            'slug' => 'WorkNotes',
+            'sitetab' => true,
             'menu_hidden' => true,
-            'callback' => array(__CLASS__, 'render'),
-        );
+            'callback' => [__CLASS__, 'render']
+        ];
         return $subArray;
     }
 
-    // Handle saving or updating a work note
+    /**
+     * Enqueue editor, Flatpickr, and JS assets.
+     */
+    public static function enqueue_assets() {
+        wp_enqueue_editor();
+        wp_enqueue_style('flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css');
+        wp_enqueue_script('flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr', [], null, true);
+
+        wp_enqueue_script('mainwp-work-notes-js', plugins_url('mainwp-work-notes.js', __FILE__), ['jquery', 'flatpickr-js'], null, true);
+        wp_localize_script('mainwp-work-notes-js', 'mainwpWorkNotes', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('work_notes_nonce'),
+            'date_format' => self::get_js_date_format(),
+            'today' => current_time('Y-m-d')
+
+        ]);
+    }
+
+    /**
+     * Convert WP date format to Flatpickr-compatible format.
+     */
+    private static function get_js_date_format() {
+        $php_format = get_option('date_format');
+        $map = ['F' => 'F', 'M' => 'M', 'm' => 'm', 'n' => 'n', 'd' => 'd', 'j' => 'j', 'Y' => 'Y', 'y' => 'y'];
+        return strtr($php_format, $map);
+    }
+
+    /**
+     * AJAX: Save or update a work note.
+     */
     public static function ajax_save_work_note_action() {
-    check_ajax_referer('work_notes_nonce', 'nonce');
+        check_ajax_referer('work_notes_nonce', 'nonce');
+        if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Insufficient permissions.']);
 
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Insufficient permissions.']);
-    }
+        global $wpdb;
+        $table = $wpdb->prefix . 'mainwp_work_notes';
 
-    $_POST = stripslashes_deep($_POST);
-    $current_wpid = isset($_POST['wpid']) ? intval($_POST['wpid']) : 0;
-    $note_id = isset($_POST['note_id']) ? intval($_POST['note_id']) : -1;
+        $site_id = isset($_POST['wpid']) ? intval($_POST['wpid']) : 0;
+        $note_id = isset($_POST['note_id']) ? intval($_POST['note_id']) : -1;
+        $date = sanitize_text_field($_POST['work_notes_date']);
+        $content = wp_kses_post($_POST['work_notes_content']);
 
-    if (!$current_wpid) {
-        wp_send_json_error(['message' => 'Invalid site ID.']);
-    }
+        if (!$site_id || !$date) wp_send_json_error(['message' => 'Missing data.']);
 
-    $work_date = sanitize_text_field($_POST['work_notes_date']);
-    $work_content = wp_kses_post($_POST['work_notes_content']);
-
-    $notes_key = 'mainwp_work_notes_' . $current_wpid;
-    $notes = get_option($notes_key, []);
-
-    if ($note_id >= 0 && isset($notes[$note_id])) {
-        $notes[$note_id]['date'] = $work_date;
-        $notes[$note_id]['content'] = $work_content;
-    } else {
-        $notes[] = [
-            'date' => $work_date,
-            'content' => $work_content,
-            'timestamp' => current_time('timestamp'),
-        ];
-        $note_id = array_key_last($notes);
-    }
-
-    update_option($notes_key, $notes);
-
-    wp_send_json_success([
-        'message' => 'Note saved successfully.',
-        'note_id' => $note_id
-    ]);
-}
-
-
-
-        public static function render_notes_table() {
-        $site_id = isset($_POST['site_id']) ? intval($_POST['site_id']) : 0;
-        if (!$site_id) {
-            wp_send_json_error(['message' => 'Invalid site ID']);
+        if ($note_id > 0) {
+            $wpdb->update($table, [
+                'work_date' => $date,
+                'content' => $content
+            ], ['id' => $note_id]);
+        } else {
+            $wpdb->insert($table, [
+                'site_id' => $site_id,
+                'work_date' => $date,
+                'content' => $content,
+                'timestamp' => current_time('mysql')
+            ]);
+            $note_id = $wpdb->insert_id;
         }
 
-        $notes_key = 'mainwp_work_notes_' . $site_id;
-        $notes = get_option($notes_key, array());
-
-        ob_start(); ?>
-        <table class="ui celled table">
-            <thead><tr><th>Date</th><th>Details</th><th>Actions</th></tr></thead>
-            <tbody>
-            <?php foreach ($notes as $index => $note) : ?>
-                <tr data-note-id="<?php echo esc_attr($index); ?>">
-                    <?php $formatted_date = date_i18n(get_option('date_format'), strtotime($note['date'])); ?>
-                    <td><?php echo esc_html($formatted_date); ?></td>
-                    <td><?php echo wp_kses_post($note['content']); ?></td>
-                    <td>
-                        <button class="ui button blue edit-note" data-note-id="<?php echo esc_attr($index); ?>">Edit</button>
-                        <button class="ui button red delete-note" data-note-id="<?php echo esc_attr($index); ?>">Delete</button>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-        <?php
-        echo ob_get_clean();
-        wp_die();
+        wp_send_json_success(['message' => 'Note saved successfully.', 'note_id' => $note_id]);
     }
 
+    /**
+     * AJAX: Delete a work note.
+     */
+    public static function ajax_delete_work_note_action() {
+        check_ajax_referer('work_notes_nonce', 'nonce');
+        if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Insufficient permissions.']);
 
-        public static function ajax_load_work_notes_form() {
-    error_log('AJAX: load_work_notes_form hit');
+        global $wpdb;
+        $id = isset($_POST['note_id']) ? intval($_POST['note_id']) : 0;
 
-    check_ajax_referer('work_notes_nonce', 'nonce');
+        if ($id > 0) {
+            $wpdb->delete($wpdb->prefix . 'mainwp_work_notes', ['id' => $id]);
+            wp_send_json_success(['message' => 'Note deleted successfully.']);
+        }
 
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error(['message' => 'Insufficient permissions']);
+        wp_send_json_error(['message' => 'Invalid note ID.']);
     }
 
-    $site_id = isset($_POST['site_id']) ? intval($_POST['site_id']) : 0;
-    if (!$site_id) {
-        wp_send_json_error(['message' => 'Invalid site ID']);
-    }
-
-    $notes_key = 'mainwp_work_notes_' . $site_id;
-    $notes = get_option($notes_key, array());
-
-    ob_start();
-    echo '<tbody>'; // FIX: wrap the rows in <tbody>
-    foreach ($notes as $index => $note) {
-        echo '<tr data-note-id="' . esc_attr($index) . '">';
-        $formatted_date = date_i18n(get_option('date_format'), strtotime($note['date']));
-        echo '<td>' . esc_html($formatted_date) . '</td>';
-
-        echo '<td>' . wp_kses_post($note['content']) . '</td>';
-        echo '<td>
-                <button class="ui button blue edit-note" data-note-id="' . esc_attr($index) . '">Edit</button>
-                <button class="ui button red delete-note" data-note-id="' . esc_attr($index) . '">Delete</button>
-              </td>';
-        echo '</tr>';
-    }
-    echo '</tbody>';
-    $html = ob_get_clean();
-
-    wp_send_json_success(['html' => $html]);
-}
-
-
-
-
-
-        
-
-
-
-
-    // Handle retrieving a note for editing
+    /**
+     * AJAX: Load a specific note for editing.
+     */
     public static function ajax_load_work_note_action() {
         check_ajax_referer('work_notes_nonce', 'nonce');
+        if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Insufficient permissions.']);
 
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Insufficient permissions.'));
-        }
+        global $wpdb;
+        $id = isset($_POST['note_id']) ? intval($_POST['note_id']) : 0;
 
-        $current_wpid = isset($_POST['wpid']) ? intval($_POST['wpid']) : 0;
-        $note_id = isset($_POST['note_id']) ? intval($_POST['note_id']) : 0;
+        $note = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}mainwp_work_notes WHERE id = %d",
+            $id
+        ), ARRAY_A);
 
-        if (!$current_wpid || $note_id === false) {
-            wp_send_json_error(array('message' => 'Invalid site or note ID.'));
-        }
-
-        $notes_key = 'mainwp_work_notes_' . $current_wpid;
-        $notes = get_option($notes_key, array());
-
-        if (isset($notes[$note_id])) {
-            $note = $notes[$note_id];
-            wp_send_json_success(array('date' => $note['date'], 'content' => $note['content']));
+        if ($note) {
+            wp_send_json_success(['date' => $note['work_date'], 'content' => $note['content']]);
         } else {
-            wp_send_json_error(array('message' => 'Note not found.'));
+            wp_send_json_error(['message' => 'Note not found.']);
         }
     }
 
-    // Handle deleting a work note
-    public static function ajax_delete_work_note_action() {
-    check_ajax_referer('work_notes_nonce', 'nonce');
+    /**
+     * AJAX: Load the full table of notes (after save/delete).
+     */
+    public static function ajax_load_work_notes_form() {
+        check_ajax_referer('work_notes_nonce', 'nonce');
+        if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Insufficient permissions.']);
 
-    if (!current_user_can('manage_options')) {
-        wp_send_json_error(array('message' => 'Insufficient permissions.'));
+        global $wpdb;
+        $site_id = isset($_POST['site_id']) ? intval($_POST['site_id']) : 0;
+
+        $notes = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}mainwp_work_notes WHERE site_id = %d ORDER BY work_date DESC",
+            $site_id
+        ));
+
+        ob_start();
+        echo '<tbody>';
+        foreach ($notes as $note) {
+            $formatted_date = date_i18n(get_option('date_format'), strtotime($note->work_date));
+            echo '<tr data-note-id="' . esc_attr($note->id) . '">';
+            echo '<td>' . esc_html($formatted_date) . '</td>';
+            echo '<td>' . wp_kses_post($note->content) . '</td>';
+            echo '<td>';
+            echo '<button class="ui button blue edit-note" data-note-id="' . esc_attr($note->id) . '">Edit</button> ';
+            echo '<button class="ui button red delete-note" data-note-id="' . esc_attr($note->id) . '">Delete</button>';
+            echo '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody>';
+
+        wp_send_json_success(['html' => ob_get_clean()]);
     }
 
-    $current_wpid = isset($_POST['wpid']) ? intval($_POST['wpid']) : 0;
-    $note_id = isset($_POST['note_id']) ? intval($_POST['note_id']) : -1;
-
-    if (!$current_wpid || $note_id < 0) {
-        wp_send_json_error(array('message' => 'Invalid site ID or note ID.'));
-    }
-
-    $notes_key = 'mainwp_work_notes_' . $current_wpid;
-    $notes = get_option($notes_key, array());
-
-    if (isset($notes[$note_id])) {
-        unset($notes[$note_id]);
-        $notes = array_values($notes); // Re-Index
-        update_option($notes_key, $notes);
-        wp_send_json_success(array('message' => 'Note deleted successfully.'));
-    } else {
-        wp_send_json_error(array('message' => 'Note not found.'));
-    }
-}
-
-
-    // Render the UI for Work Notes tab
+    /**
+     * Render the full Work Notes UI.
+     */
     public static function render() {
         do_action('mainwp_pageheader_sites');
 
         $current_wpid = MainWP_System_Utility::get_current_wpid();
         if (!MainWP_Utility::ctype_digit($current_wpid)) return;
 
-        $notes_key = 'mainwp_work_notes_' . $current_wpid;
-        $notes = get_option($notes_key, array());
+        global $wpdb;
+        $notes = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}mainwp_work_notes WHERE site_id = %d ORDER BY work_date DESC",
+            $current_wpid
+        ));
 
         echo '<div id="mainwp_tab_WorkNotes_container" class="ui segment">';
-
-        // Work Notes form
-		echo '<div class="mainwp-work-note-message" style="display:none;"></div>';
+        echo '<div class="mainwp-work-note-message" style="display:none;"></div>';
         echo '<form id="work-notes-form" class="ui form" style="padding: 20px; max-width: 95%; margin: 0 auto;">';
         echo '<input type="hidden" name="wpid" value="' . esc_attr($current_wpid) . '">';
         echo '<input type="hidden" name="note_id" value="-1">';
-        //echo '<input type="text" id="work_notes_date" name="work_notes_date" value="' . esc_attr($current_date) . '" required style="width: 100%;">';
 
-        // Testing date
         $current_date = current_time('Y-m-d');
         echo '<div class="field"><label for="work_notes_date">Work Date:</label>';
         echo '<input type="text" id="work_notes_date" name="work_notes_date" value="' . esc_attr($current_date) . '" required style="width: 100%;"></div>';
 
         echo '<div class="field"><label for="work_notes_content">Work Details:</label>';
         ob_start();
-        wp_editor('', 'work_notes_content', array(
+        wp_editor('', 'work_notes_content', [
             'textarea_name' => 'work_notes_content',
             'textarea_rows' => 10,
             'media_buttons' => true,
-            'tinymce'       => true,
-            'quicktags'     => true,
-        ));
+            'tinymce' => true,
+            'quicktags' => true,
+        ]);
         echo ob_get_clean();
         echo '</div>';
         echo '<button type="button" id="save-work-note" class="ui button green">Save Work Note</button>';
         echo '</form>';
 
-        // Existing Notes Table
         echo '<h3 class="ui dividing header">Existing Work Notes</h3>';
         echo '<table class="ui celled table"><thead><tr><th>Date</th><th>Details</th><th>Actions</th></tr></thead><tbody>';
-        foreach ($notes as $index => $note) {
-            echo '<tr>';
-            $formatted_date = date_i18n(get_option('date_format'), strtotime($note['date']));
+        foreach ($notes as $note) {
+            $formatted_date = date_i18n(get_option('date_format'), strtotime($note->work_date));
+            echo '<tr data-note-id="' . esc_attr($note->id) . '">';
             echo '<td>' . esc_html($formatted_date) . '</td>';
-
-            echo '<td>' . wp_kses_post($note['content']) . '</td>';
-            echo '<td>
-                    <button class="ui button blue edit-note" data-note-id="' . esc_attr($index) . '">Edit</button>
-                    <button class="ui button red delete-note" data-note-id="' . esc_attr($index) . '">Delete</button>
-                  </td>';
+            echo '<td>' . wp_kses_post($note->content) . '</td>';
+            echo '<td>';
+            echo '<button class="ui button blue edit-note" data-note-id="' . esc_attr($note->id) . '">Edit</button> ';
+            echo '<button class="ui button red delete-note" data-note-id="' . esc_attr($note->id) . '">Delete</button>';
+            echo '</td>';
             echo '</tr>';
         }
         echo '</tbody></table></div>';
+
         do_action('mainwp_pagefooter_sites');
     }
 }
 
-// Initialize class
 MainWP_Work_Notes::init();
 
-
+/**
+ * Handles Pro Reports integration for work notes.
+ */
 class MainWP_Work_Notes_Pro_Reports {
 
+    /**
+     * Register custom token filters.
+     */
     public static function init() {
-        add_filter('mainwp_pro_reports_custom_tokens', array(__CLASS__, 'generate_work_notes_tokens'), 10, 4);
-        add_filter('mainwp_client_reports_custom_tokens', array(__CLASS__, 'client_reports_custom_tokens'), 10, 3);
+        add_filter('mainwp_pro_reports_custom_tokens', [__CLASS__, 'generate_work_notes_tokens'], 10, 4);
+        add_filter('mainwp_client_reports_custom_tokens', [__CLASS__, 'client_reports_custom_tokens'], 10, 3);
     }
 
+    /**
+     * Register token replacement for client reports.
+     */
     public static function client_reports_custom_tokens($tokensValues, $report, $site) {
-        $tokensValues['[client.customwork.notes]'] = self::generate_work_notes_tokens($tokensValues, $report, $site, $templ_email);
+        $tokensValues['[client.customwork.notes]'] = self::generate_work_notes_tokens($tokensValues, $report, $site, null);
         return $tokensValues['[client.customwork.notes]'];
     }
 
+    /**
+     * Generate HTML table for work notes within a date range.
+     */
     public static function generate_work_notes_tokens($tokensValues, $report, $site, $templ_email) {
-        $site_id = isset($site['id']) ? $site['id'] : 0;
-        if (!$site_id) {
-            return $tokensValues;
-        }
+        global $wpdb;
+
+        $site_id = isset($site['id']) ? (int)$site['id'] : 0;
+        if (!$site_id) return $tokensValues;
 
         $from_date = isset($report->date_from) ? date('Y-m-d', $report->date_from) : '';
         $to_date = isset($report->date_to) ? date('Y-m-d', $report->date_to) : '';
 
-        if (!$from_date || !$to_date) {
-            return $tokensValues;
-        }
+        if (!$from_date || !$to_date) return $tokensValues;
 
-        error_log('Work Notes - From Date: ' . $from_date);
-        error_log('Work Notes - To Date: ' . $to_date);
+        $notes = self::get_work_notes($site_id, $from_date, $to_date);
 
-        $work_notes = self::get_work_notes($site_id, $from_date, $to_date);
-
-        if (empty($work_notes)) {
-            $tokensValues['[client.customwork.notes]'] = __('No work notes found within the selected date range.','mainwp-client-notes-pro-reports-extention');
+        if (empty($notes)) {
+            $tokensValues['[client.customwork.notes]'] = __('No work notes found within the selected date range.', 'mainwp-client-notes-pro-reports-extention');
         } else {
             $output = '<table style="width: 100%; border-collapse: collapse;" border="1">';
-            $output .= '<thead><tr><th>'.__('Date', 'mainwp-client-notes-pro-reports-extention').'</th><th>'.__('Work Details', 'mainwp-client-notes-pro-reports-extention').'</th></tr></thead>';
+            $output .= '<thead><tr><th>' . __('Date', 'mainwp-client-notes-pro-reports-extention') . '</th><th>' . __('Work Details', 'mainwp-client-notes-pro-reports-extention') . '</th></tr></thead>';
             $output .= '<tbody>';
-            foreach ($work_notes as $note) {
-                $output .= '<tr>';
-                $formatted_date = date_i18n(get_option('date_format'), strtotime($note['date']));
-                $output .= '<td>' . esc_html($formatted_date) . '</td>';
-                $output .= '<td>' . wp_kses_post($note['content']) . '</td>';  // updated to show formatted HTML
-                $output .= '</tr>';
+            foreach ($notes as $note) {
+                $formatted_date = date_i18n(get_option('date_format'), strtotime($note->work_date));
+                $output .= '<tr><td>' . esc_html($formatted_date) . '</td><td>' . wp_kses_post($note->content) . '</td></tr>';
             }
             $output .= '</tbody></table>';
-
             $tokensValues['[client.customwork.notes]'] = $output;
         }
 
         return $tokensValues;
     }
 
+    /**
+     * Get work notes from DB in a date range.
+     */
     public static function get_work_notes($site_id, $date_from, $date_to) {
-        $notes_key = 'mainwp_work_notes_' . $site_id;
-        $work_notes = get_option($notes_key, array());
+        global $wpdb;
 
-        $filtered_notes = array_filter($work_notes, function($note) use ($date_from, $date_to) {
-            $note_date = strtotime($note['date']);
-            $date_from_ts = strtotime($date_from);
-            $date_to_ts = strtotime($date_to);
-
-            return ($note_date >= $date_from_ts && $note_date <= $date_to_ts);
-        });
-
-        usort($filtered_notes, function($a, $b) {
-            return strtotime($a['date']) - strtotime($b['date']);
-        });
-
-        return $filtered_notes;
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}mainwp_work_notes WHERE site_id = %d AND work_date BETWEEN %s AND %s ORDER BY work_date ASC",
+            $site_id, $date_from, $date_to
+        ));
     }
 }
 
 MainWP_Work_Notes_Pro_Reports::init();
+
