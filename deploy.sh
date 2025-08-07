@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
-
+# Ensure TMPDIR exists (for mktemp etc.)
+: "${TMPDIR:=$(mktemp -d)}"
 # =====================================================
 # PATH SETUP
 # =====================================================
