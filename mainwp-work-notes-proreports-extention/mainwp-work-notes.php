@@ -39,29 +39,31 @@ class MainWP_Work_Notes {
          * === Migration Hooks (Temporary, can be removed in a future version) ===
          * Delay check until after pluggable functions are available
          */
-        add_action('admin_init', function () {
-        // Only run if we're in admin and can manage
-        if (!is_admin() || !current_user_can('manage_options')) {
-            return;
-        }
+                add_action('admin_init', function () {
+                    // Only run if we're in admin and can manage
+                    if (!is_admin() || !current_user_can('manage_options')) {
+                        return;
+                    }
 
-        // Handle first-run migration (until 1.2.8)
-        if (
-            version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_REMOVE_MIGRATION_LOGIC_VERSION, '<') &&
-            !get_option('mainwp_work_notes_migrated')
-        ) {
-            self::maybe_auto_migrate_legacy_notes();
-        }
+                    // Handle first-run migration (until 1.2.8)
+                    if (
+                        version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_REMOVE_MIGRATION_LOGIC_VERSION, '<') &&
+                        !get_option('mainwp_work_notes_migrated')
+                    ) {
+                        self::maybe_auto_migrate_legacy_notes();
+                    }
 
-        // Cleanup legacy options in 1.3.0+
-        if (
-            version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_DELETE_LEGACY_OPTIONS_VERSION, '>=') &&
-            get_option('mainwp_work_notes_migrated')
-        ) {
-            self::maybe_delete_legacy_options();
-        }
-    });       
-      
+                    // Cleanup legacy options in 1.3.0+
+                    if (
+                        version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_DELETE_LEGACY_OPTIONS_VERSION, '>=') &&
+                        get_option('mainwp_work_notes_migrated')
+                    ) {
+                        self::maybe_delete_legacy_options();
+                    }
+                }); 
+
+    } 
+          
 
 
 
@@ -443,7 +445,10 @@ class MainWP_Work_Notes {
     }
 }
 
-MainWP_Work_Notes::init();
+
+//MainWP_Work_Notes::init();
+\MainWP\Dashboard\MainWP_Work_Notes::init();
+
 
 /**
  * Handles Pro Reports integration for work notes.
