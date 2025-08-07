@@ -2,18 +2,21 @@
 setlocal enabledelayedexpansion
 
 REM ─────────────────────────────────────────────────────
+REM PATH SETUP
+REM ─────────────────────────────────────────────────────
+SET "SCRIPT_DIR=%~dp0"
+IF "%SCRIPT_DIR:~-1%"=="\" SET "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+
+REM ─────────────────────────────────────────────────────
 REM CONFIGURATION
 REM ─────────────────────────────────────────────────────
-SET "PLUIGN_NAME=MainWP Client Notes Pro Report Extension"
+SET "PLUGIN_NAME=MainWP Client Notes Pro Report Extension"
 SET "PLUGIN_TAGS=MainWP, ClientNotes, Pro-report"
+SET "PLUGIN_SLUG=mainwp-work-notes-proreports-extention"
+
 SET "HEADER_SCRIPT=C:\Ignore By Avast\0. PATHED Items\Plugins\deployscripts\myplugin_headers.php"
-SET "PLUGIN_DIR=C:\Users\Nathan\Git\MainWP-Client-Notes-For-Pro-Report\mainwp-work-notes-proreports-extention\"
-IF "%PLUGIN_DIR:~-1%"=="\" SET "PLUGIN_DIR=%PLUGIN_DIR:~0,-1%"
-SET "PLUGIN_FILE=%PLUGIN_DIR%\mainwp-work-notes-proreports-extention.php"
 SET "CHANGELOG_FILE=changelog.txt"
 SET "STATIC_FILE=static.txt"
-SET "README=%PLUGIN_DIR%\readme.txt"
-SET "TEMP_README=%PLUGIN_DIR%\readme_temp.txt"
 SET "DEST_DIR="
 SET "DEPLOY_TARGET=github"  REM github or private
 
@@ -21,14 +24,24 @@ REM GitHub settings
 SET "GITHUB_REPO=stingray82/MainWP-Client-Notes-For-Pro-Report"
 SET "TOKEN_FILE=C:\Ignore By Avast\0. PATHED Items\Plugins\deployscripts\github_token.txt"
 SET /P GITHUB_TOKEN=<"%TOKEN_FILE%"
-SET "ZIP_NAME=mainwp-work-notes-proreports-extention.zip"
+SET "ZIP_NAME=%PLUGIN_SLUG%.zip"
 
 REM JSON Settings
 SET "GENERATOR_SCRIPT=C:\Ignore By Avast\0. PATHED Items\Plugins\deployscripts\generate_index.php"
-SET "REPO_ROOT=%PLUGIN_DIR%\.."
+
+REM ─────────────────────────────────────────────────────
+REM DERIVED PATHS
+REM ─────────────────────────────────────────────────────
+SET "PLUGIN_DIR=%SCRIPT_DIR%\%PLUGIN_SLUG%"
+IF "%PLUGIN_DIR:~-1%"=="\" SET "PLUGIN_DIR=%PLUGIN_DIR:~0,-1%"
+SET "PLUGIN_FILE=%PLUGIN_DIR%\%PLUGIN_SLUG%.php"
+SET "README=%PLUGIN_DIR%\readme.txt"
+SET "TEMP_README=%PLUGIN_DIR%\readme_temp.txt"
+SET "REPO_ROOT=%SCRIPT_DIR%"
 SET "STATIC_SUBFOLDER=%REPO_ROOT:\=\\%\uupd"
 
 REM Script Version 1.1
+
 
 REM ─────────────────────────────────────────────────────
 REM VERIFY REQUIRED FILES
@@ -98,7 +111,7 @@ REM ─────────────────────────�
 REM CREATE README.TXT
 REM ─────────────────────────────────────────────────────
 (
-    echo === %PLUIGN_NAME% ===
+    echo === %PLUGIN_NAME% ===
     echo Contributors: reallyusefulplugins
     echo Donate link: https://reallyusefulplugins.com/donate
     echo Tags: %PLUGIN_TAGS%
