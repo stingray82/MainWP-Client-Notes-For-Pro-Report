@@ -31,7 +31,7 @@ class MainWP_Work_Notes {
 
         /**
          * 
-         *  Delete from version 1.3.1 onwards This is a future clean up logic
+         *  Delete from version 1.3.5 onwards This is a future clean up logic
          * 
          */
 
@@ -45,7 +45,7 @@ class MainWP_Work_Notes {
                         return;
                     }
 
-                    // Handle first-run migration (until 1.2.8)
+                    // Handle first-run migration (until 1.3.2)
                     if (
                         version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_REMOVE_MIGRATION_LOGIC_VERSION, '<') &&
                         !get_option('mainwp_work_notes_migrated')
@@ -53,7 +53,7 @@ class MainWP_Work_Notes {
                         self::maybe_auto_migrate_legacy_notes();
                     }
 
-                    // Cleanup legacy options in 1.3.0+
+                    // Cleanup legacy options in 1.3.4+
                     if (
                         version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_DELETE_LEGACY_OPTIONS_VERSION, '>=') &&
                         get_option('mainwp_work_notes_migrated')

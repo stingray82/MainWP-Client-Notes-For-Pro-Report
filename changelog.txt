@@ -14,11 +14,10 @@ Changed:
   - Save button label dynamically changes between "Save Note" and "Update Note" based on context
 
 Clean-up:
-- Migration logic grouped and documented for future removal in v1.2.8
-- Legacy wp_options notes will be removed automatically in v1.3.0+
+- Migration logic grouped and documented for future removal in v1.3.2
+- Legacy wp_options notes will be removed automatically in v1.3.4+
 - Date picker logic centralized and fallback-safe
 - Enhanced UI interactivity with better error handling and feedback
-
 
 1.2.5
 New: Added Support for Preleases
