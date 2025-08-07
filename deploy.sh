@@ -234,7 +234,10 @@ else
 
   release_tag="v$version"
   body_file="$(mktemp)"
-  changelog_body="$(sed ':a;N;$!ba;s/\r//g' "$CHANGELOG_FILE" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  changelog_body="$(sed ':a;N;$!ba;s/\r//g' "$CHANGELOG_FILE" \
+    | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' \
+    | tr -d '\n')"
+
 
   cat >"$body_file" <<JSON
 {
