@@ -257,6 +257,54 @@ add_action( 'plugins_loaded', function() {
     \RUP\Updater\Updater_V1::register( $updater_config );
 }, 20 );
 
+
+/* 
+Old  Filter
 add_filter('uupd/allow_prerelease/mainwp-client-notes-pro-reports-extention', function ($allow) {
     return get_option('mainwp_client_notes_proreport_allow_prerelease') === 'yes';
 }, 5);
+*/
+
+//Testing New Filter
+add_filter(
+    'uupd/metadata_result',
+    function ($meta, $slug) {
+
+        // Get installed version (works for both plugins & themes)
+        if (is_plugin_active($slug . '/' . $slug . '.php')) {
+            // Plugin case
+            $plugin_file = WP_PLUGIN_DIR . '/' . $slug . '/' . $slug . '.php';
+            if (file_exists($plugin_file)) {
+                $installed_version = get_plugin_data($plugin_file)['Version'] ?? '0.0.0';
+            } else {
+                $installed_version = '0.0.0';
+            }
+        } else {
+            // Theme case
+            $theme = wp_get_theme($slug);
+            $installed_version = $theme->get('Version') ?: '0.0.0';
+        }
+
+        // Pull allow_prerelease from an option per slug if available
+        $allow_prerelease = (get_option("{$slug}_allow_prerelease") === 'yes');
+
+        // Detect dev environment
+        $is_dev_env = defined('RUP_WP_ENV') && RUP_WP_ENV === 'development';
+
+        // If no prerelease allowed, block all prerelease versions
+        if (!$allow_prerelease && preg_match('/-(alpha|beta|rc|dev|preview)/i', $meta->version ?? '')) {
+            $meta->version = $installed_version;
+            return $meta;
+        }
+
+        // If prerelease allowed but NOT in dev env → block only dev builds
+        if ($allow_prerelease && !$is_dev_env && preg_match('/-dev(\.\d+)?$/i', $meta->version ?? '')) {
+            $meta->version = $installed_version;
+            return $meta;
+        }
+
+        return $meta;
+    },
+    10,
+    2
+);

@@ -463,46 +463,262 @@ class MainWP_Work_Notes_Pro_Reports {
         add_filter('mainwp_client_reports_custom_tokens', [__CLASS__, 'client_reports_custom_tokens'], 10, 3);
     }
 
-    /**
-     * Register token replacement for client reports.
+        /**
+     * Hook entry: enrich $tokensValues with all work-notes tokens.
+     *
+     * This simply delegates to generate_work_notes_tokens(), which is the single
+     * source of truth for adding tokens like:
+     * - [client.customwork.notes]        (legacy)
+     * - [client.customwork.notes_table]  (class-based)
+     * - [client.customwork.notes_email]  (inline/email)
+     * …and any future tokens you add later.
+     *
+     * @param array $tokensValues
+     * @param object $report
+     * @param array  $site
+     * @return array Updated $tokensValues containing all work-notes tokens.
      */
-    public static function client_reports_custom_tokens($tokensValues, $report, $site) {
-        $tokensValues['[client.customwork.notes]'] = self::generate_work_notes_tokens($tokensValues, $report, $site, null);
-        return $tokensValues['[client.customwork.notes]'];
-    }
-
-    /**
-     * Generate HTML table for work notes within a date range.
-     */
-    public static function generate_work_notes_tokens($tokensValues, $report, $site, $templ_email) {
-        global $wpdb;
-
-        $site_id = isset($site['id']) ? (int)$site['id'] : 0;
-        if (!$site_id) return $tokensValues;
-
-        $from_date = isset($report->date_from) ? date('Y-m-d', $report->date_from) : '';
-        $to_date = isset($report->date_to) ? date('Y-m-d', $report->date_to) : '';
-
-        if (!$from_date || !$to_date) return $tokensValues;
-
-        $notes = self::get_work_notes($site_id, $from_date, $to_date);
-
-        if (empty($notes)) {
-            $tokensValues['[client.customwork.notes]'] = __('No work notes found within the selected date range.', 'mainwp-client-notes-pro-reports-extention');
-        } else {
-            $output = '<table style="width: 100%; border-collapse: collapse;" border="1">';
-            $output .= '<thead><tr><th>' . __('Date', 'mainwp-client-notes-pro-reports-extention') . '</th><th>' . __('Work Details', 'mainwp-client-notes-pro-reports-extention') . '</th></tr></thead>';
-            $output .= '<tbody>';
-            foreach ($notes as $note) {
-                $formatted_date = date_i18n(get_option('date_format'), strtotime($note->work_date));
-                $output .= '<tr><td>' . esc_html($formatted_date) . '</td><td>' . wp_kses_post($note->content) . '</td></tr>';
-            }
-            $output .= '</tbody></table>';
-            $tokensValues['[client.customwork.notes]'] = $output;
-        }
-
+    public static function client_reports_custom_tokens( $tokensValues, $report, $site ) {
+        // Delegate: this will add ALL related tokens now and in the future.
+        $tokensValues = self::generate_work_notes_tokens( $tokensValues, $report, $site, null );
         return $tokensValues;
     }
+
+
+
+    /**
+     * Fallback wrapper for string-returning hooks. (Not Currently used not sure about non pro report tokens so have added just incase)
+     * Prefers the class-based token, then email, then legacy.
+     */
+    public static function client_reports_custom_tokens_string( $tokensValues, $report, $site ) {
+        $tokensValues = self::generate_work_notes_tokens( $tokensValues, $report, $site, null );
+
+        // Pick best-available token without hardcoding existence.
+        $preferred = array(
+            '[client.customwork.notes_table]',
+            '[client.customwork.notes_email]',
+            '[client.customwork.notes]',
+        );
+        foreach ( $preferred as $token ) {
+            if ( isset( $tokensValues[ $token ] ) ) {
+                return $tokensValues[ $token ];
+            }
+        }
+        // Nothing matched; return empty string to be safe.
+        return '';
+    }
+
+    /**
+     * Generate work notes tokens.
+     *
+     * Tokens produced:
+     * - [client.customwork.notes]        (legacy, inline <table> w/ minimal styles — unchanged)
+     * - [client.customwork.notes_table]  (class-based, CSS-stylable wrapper/table)
+     * - [client.customwork.notes_email]  (email-safe inline styles, now with modes)
+     *
+     * Email modes:
+     *   Core (built-in):  default | compact | bordered
+     *   Custom (via filter): add/override with `mainwp_client_notes_email_modes`
+     *
+     * Usage in email templates:
+     *   [client.customwork.notes_email]                      -> default mode
+     *   [client.customwork.notes_email mode="compact"]       -> compact mode
+     *   [client.customwork.notes_email mode="bordered"]      -> bordered mode
+     *   [client.customwork.notes_email mode="my_brand_mode"] -> (if provided by filter)
+     */
+    public static function generate_work_notes_tokens( $tokensValues, $report, $site, $templ_email ) {
+    // Site/date guards
+    $site_id = isset( $site['id'] ) ? (int) $site['id'] : 0;
+    if ( ! $site_id ) return $tokensValues;
+
+    $from_date = isset( $report->date_from ) ? date( 'Y-m-d', $report->date_from ) : '';
+    $to_date   = isset( $report->date_to ) ? date( 'Y-m-d', $report->date_to ) : '';
+    if ( ! $from_date || ! $to_date ) return $tokensValues;
+
+    // Fetch notes
+    $notes = self::get_work_notes( $site_id, $from_date, $to_date );
+
+    // Labels / visibility (keys: date, content)
+    $columns = apply_filters( 'mainwp_client_notes_columns', array(
+        'date'    => esc_html__( 'Date', 'mainwp-client-notes-pro-reports-extention' ),
+        'content' => esc_html__( 'Work Details', 'mainwp-client-notes-pro-reports-extention' ),
+    ) );
+
+    // Helpers
+    $format_note_date = static function( $raw_date ) {
+        return date_i18n( get_option( 'date_format' ), strtotime( $raw_date ) );
+    };
+    $cell_html = static function( $key, $note, $formatted_date ) {
+        $value = ( 'date' === $key ) ? esc_html( $formatted_date ) : wp_kses_post( $note->content );
+        return apply_filters( 'mainwp_client_notes_cell_content', $value, $key, $note );
+    };
+
+    // No notes -> fill all tokens with message
+    if ( empty( $notes ) ) {
+        $no_notes = __( 'No work notes found within the selected date range.', 'mainwp-client-notes-pro-reports-extention' );
+        $tokensValues['[client.customwork.notes]']       = $no_notes;
+        $tokensValues['[client.customwork.notes_table]'] = $no_notes;
+        $tokensValues['[client.customwork.notes_email]'] = esc_html( $no_notes );
+        return $tokensValues;
+    }
+
+    // =========================
+    // Legacy (unchanged)
+    // =========================
+    $legacy  = '<table style="width: 100%; border-collapse: collapse;" border="1">';
+    $legacy .= '<thead><tr>';
+    if ( isset( $columns['date'] ) )    { $legacy .= '<th>' . esc_html( $columns['date'] ) . '</th>'; }
+    if ( isset( $columns['content'] ) ) { $legacy .= '<th>' . esc_html( $columns['content'] ) . '</th>'; }
+    $legacy .= '</tr></thead><tbody>';
+    foreach ( $notes as $note ) {
+        $formatted_date = $format_note_date( $note->work_date );
+        $legacy .= '<tr>';
+        if ( isset( $columns['date'] ) )    { $legacy .= '<td>' . $cell_html( 'date', $note, $formatted_date ) . '</td>'; }
+        if ( isset( $columns['content'] ) ) { $legacy .= '<td>' . $cell_html( 'content', $note, $formatted_date ) . '</td>'; }
+        $legacy .= '</tr>';
+    }
+    $legacy .= '</tbody></table>';
+    $tokensValues['[client.customwork.notes]'] = $legacy;
+
+    // =========================
+    // Class-based (CSS-stylable)
+    // =========================
+    $classes = apply_filters( 'mainwp_client_notes_table_classes', array(
+        'wrapper' => 'client-notes',
+        'table'   => 'client-notes__table',
+        'date'    => 'client-notes__date',
+        'content' => 'client-notes__content',
+    ) );
+    $attrs = apply_filters( 'mainwp_client_notes_table_attributes', array(
+        'wrapper' => array(),
+        'table'   => array(),
+    ) );
+    $attr_to_html = static function( $arr ) {
+        if ( empty( $arr ) || ! is_array( $arr ) ) return '';
+        $buf = '';
+        foreach ( $arr as $k => $v ) {
+            if ( $v === '' || $v === null ) continue;
+            $buf .= ' ' . esc_attr( $k ) . '="' . esc_attr( $v ) . '"';
+        }
+        return $buf;
+    };
+
+    $modern  = '<div class="' . esc_attr( $classes['wrapper'] ) . '"' . $attr_to_html( $attrs['wrapper'] ) . '>';
+    $modern .= '<table class="' . esc_attr( $classes['table'] ) . '"' . $attr_to_html( $attrs['table'] ) . '>';
+    $modern .= '<thead><tr>';
+    if ( isset( $columns['date'] ) )    { $modern .= '<th>' . esc_html( $columns['date'] ) . '</th>'; }
+    if ( isset( $columns['content'] ) ) { $modern .= '<th>' . esc_html( $columns['content'] ) . '</th>'; }
+    $modern .= '</tr></thead><tbody>';
+    foreach ( $notes as $note ) {
+        $formatted_date = $format_note_date( $note->work_date );
+        $modern .= '<tr>';
+        if ( isset( $columns['date'] ) )    { $modern .= '<td class="' . esc_attr( $classes['date'] ) . '">' . $cell_html( 'date', $note, $formatted_date ) . '</td>'; }
+        if ( isset( $columns['content'] ) ) { $modern .= '<td class="' . esc_attr( $classes['content'] ) . '">' . $cell_html( 'content', $note, $formatted_date ) . '</td>'; }
+        $modern .= '</tr>';
+    }
+    $modern .= '</tbody></table></div>';
+    $tokensValues['[client.customwork.notes_table]'] = $modern;
+
+    // =========================
+    // Email-safe token (inline)
+    // Modes are selected via filters (no token attributes).
+    // Core modes: default | compact | bordered
+    //   Add/override modes:  mainwp_client_notes_email_modes
+    //   Choose active mode:  mainwp_client_notes_email_active_mode
+    //   Per-row tweaks:      mainwp_client_notes_email_row_styles
+    //   Legacy overrides:    mainwp_client_notes_email_styles (merged)
+    // =========================
+
+    $core_modes = array(
+        'default' => array(
+            'table'      => 'border-collapse:collapse;border:1px solid #e5e7eb;width:100%;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;',
+            'th'         => 'background:#f3f4f6;text-align:left;padding:10px 12px;border-bottom:1px solid #e5e7eb;',
+            'td'         => 'padding:10px 12px;vertical-align:top;border-top:1px solid #f1f5f9;',
+            'date_td'    => '',
+            'content_td' => '',
+            'odd_bg'     => '#fafafa',
+            'even_bg'    => '#ffffff',
+            'table_role' => 'presentation',
+            'hide_header'=> false,
+        ),
+        'compact' => array(
+            'table'      => 'border-collapse:collapse;border:1px solid #dddddd;width:100%;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;',
+            'th'         => 'background:#f8f8f8;text-align:left;padding:6px 8px;border-bottom:1px solid #dddddd;',
+            'td'         => 'padding:6px 8px;vertical-align:top;border-top:1px solid #eeeeee;',
+            'date_td'    => 'width:120px;white-space:nowrap;',
+            'content_td' => '',
+            'odd_bg'     => '#ffffff',
+            'even_bg'    => '#fdfdfd',
+            'table_role' => 'presentation',
+            'hide_header'=> false,
+        ),
+        'bordered' => array(
+            'table'      => 'border-collapse:collapse;border:1px solid #cccccc;width:100%;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;',
+            'th'         => '',
+            'td'         => 'padding:10px 12px;vertical-align:top;border-top:1px solid #cccccc;',
+            'date_td'    => 'font-weight:bold;white-space:nowrap;',
+            'content_td' => 'word-break:break-word;',
+            'odd_bg'     => '#ffffff',
+            'even_bg'    => '#ffffff',
+            'table_role' => 'presentation',
+            'hide_header'=> true,
+        ),
+    );
+
+    // Add/override modes
+    $style_modes = apply_filters( 'mainwp_client_notes_email_modes', $core_modes );
+
+    // Pick active mode (per site/report if desired)
+    $active_mode = apply_filters( 'mainwp_client_notes_email_active_mode', 'default', $report, $site );
+    if ( empty( $active_mode ) || ! isset( $style_modes[ $active_mode ] ) ) {
+        $active_mode = 'default';
+    }
+
+    $email_styles = $style_modes[ $active_mode ];
+
+    // Legacy single-style override: merge over chosen mode
+    $legacy_override = apply_filters( 'mainwp_client_notes_email_styles', array() );
+    if ( is_array( $legacy_override ) && ! empty( $legacy_override ) ) {
+        $email_styles = array_merge( $email_styles, $legacy_override );
+    }
+
+    $hide_header = ! empty( $email_styles['hide_header'] );
+
+    // Build email table
+    $row   = 0;
+    $email = '<table role="' . esc_attr( $email_styles['table_role'] ) . '" width="100%" cellpadding="0" cellspacing="0" style="' . esc_attr( $email_styles['table'] ) . '">';
+    if ( ! $hide_header ) {
+        $email .= '<thead><tr>';
+        if ( isset( $columns['date'] ) )    { $email .= '<th align="left" style="' . esc_attr( $email_styles['th'] ) . '">' . esc_html( $columns['date'] ) . '</th>'; }
+        if ( isset( $columns['content'] ) ) { $email .= '<th align="left" style="' . esc_attr( $email_styles['th'] ) . '">' . esc_html( $columns['content'] ) . '</th>'; }
+        $email .= '</tr></thead>';
+    }
+    $email .= '<tbody>';
+    foreach ( $notes as $note ) {
+        $row++;
+        $formatted_date = $format_note_date( $note->work_date );
+
+        $row_styles = apply_filters( 'mainwp_client_notes_email_row_styles', array(
+            'bg' => ( $row % 2 === 1 ) ? $email_styles['odd_bg'] : $email_styles['even_bg'],
+        ), $row, $note );
+
+        $date_td_styles    = trim( $email_styles['td'] . ( ! empty( $email_styles['date_td'] ) ? $email_styles['date_td'] : '' ) );
+        $content_td_styles = trim( $email_styles['td'] . ( ! empty( $email_styles['content_td'] ) ? $email_styles['content_td'] : '' ) );
+
+        $email .= '<tr>';
+        if ( isset( $columns['date'] ) )    { $email .= '<td style="background:' . esc_attr( $row_styles['bg'] ) . ';' . esc_attr( $date_td_styles ) . '">' . $cell_html( 'date', $note, $formatted_date ) . '</td>'; }
+        if ( isset( $columns['content'] ) ) { $email .= '<td style="background:' . esc_attr( $row_styles['bg'] ) . ';' . esc_attr( $content_td_styles ) . '">' . $cell_html( 'content', $note, $formatted_date ) . '</td>'; }
+        $email .= '</tr>';
+    }
+    $email .= '</tbody></table>';
+
+    $tokensValues['[client.customwork.notes_email]'] = $email;
+
+    return $tokensValues;
+}
+
+
+    
 
     /**
      * Get work notes from DB in a date range.
