@@ -28,9 +28,9 @@ jQuery(document).ready(function ($) {
     }
   }
 
-  // Replaces deprecated .focus()/.blur() event shorthands that jQuery Migrate warns about
+  // Replaces deprecated .focus()/.blur() event shorthands
   function fixDatePicker() {
-    // If an altInput exists, ensure it's in sync, but don't use deprecated shorthands
+    // If an altInput exists, ensure it's in sync
     const val = $date.val();
     setDateInput(val, true);
   }
