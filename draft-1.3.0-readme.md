@@ -3,14 +3,63 @@ MainWP-Client-Notes-For-Pro-Report
 
 ![MainWP Work Notes](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Extention.png)
 
->   **Note:** This extension requires **MainWP Pro Reports**.
+>   **Requires:** MainWP Pro Reports  
+>   **Tested with:** WordPress 6.x, MainWP 4.x  
+>   **Version:** 1.3.0  
+>   **Release date:** YYYY-MM-DD
 
 What’s It Do?
 -------------
 
-This plugin allows you to add work notes and client notes on a **per-site
-basis**, filtered by date range, and automatically included in your **MainWP Pro
-Reports** using a special token.
+This extension lets you add work notes and client notes on a **per-site basis**,
+filtered by date range, and automatically include them in your **MainWP Pro
+Reports** via special tokens.
+
+What’s New in 1.3.0
+-------------------
+
+-   **Dedicated Database Table:** Notes are now stored in `wp_mainwp_work_notes`
+    for better scalability and performance.
+
+-   **Three Token Outputs:**
+
+    -   `[client.customwork.notes]` — legacy HTML table, minimal styling.
+
+    -   `[client.customwork.notes_table]` — CSS-friendly HTML structure for
+        reports/PDFs.
+
+    -   `[client.customwork.notes_email]` — email-safe inline-styled table with
+        selectable modes.
+
+-   **Flatpickr Date Picker:** Localized, auto-selects today’s date, syncs with
+    manual input.
+
+-   **Dynamic Save/Update Button:** Automatically changes based on context.
+
+-   **Automatic Migration:** Legacy `wp_options`-based notes are migrated on
+    upgrade.
+
+-   **Manual Migration Fallback:** Admin bar button to trigger migration if
+    needed.
+
+-   **Strict Date Validation:** Dates must be in `YYYY-MM-DD` format (picker
+    enforced).
+
+-   **Security & Stability:** All database queries fully parameterized.
+
+-   **Future-Proof Cleanup:** Legacy `wp_options` data auto-removed in v1.3.4+.
+
+Changelog
+---------
+
+**1.3.0 – YYYY-MM-DD** - Implemented dedicated `wp_mainwp_work_notes` table. -
+Added `[client.customwork.notes_table]` and `[client.customwork.notes_email]`
+tokens. - Integrated Flatpickr date picker with localization and default date
+handling. - Added dynamic “Save Note” / “Update Note” button. - Added automatic
+migration with manual admin bar trigger. - Enforced strict `YYYY-MM-DD` date
+validation. - Parameterized all database queries. - Updated JS to remove
+deprecated jQuery shorthands. - Prepared legacy data cleanup hooks for future
+release.
 
 Usage Instructions
 ------------------
@@ -25,35 +74,20 @@ Usage Instructions
 
 3.  **Open the Work Notes Page**
 
-    ![Work Notes Page](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Screen.png)
+    ![](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Screen.png)
 
 4.  **Add Your Notes and Use the Token**  
     Use `[client.customwork.notes]` in your Pro Report template to include these
     notes in client-facing reports.
 
-    ![Example Code](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Example_code_in_use.png)
+    ![](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Example_code_in_use.png)
 
 5.  **Your Notes Render in the Final Report**
 
-    ![Rendered Code](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Rendered_Code.png)
+    ![](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Rendered_Code.png)
 
-Coming in v1.3.0
-----------------
-
--   Notes are now saved to a **dedicated database table**
-    (`wp_mainwp_work_notes`) for better scalability and performance.
-
--   **Flatpickr** date selector with localized display format.
-
--   Automatically populates today's date when creating a new note.
-
--   Dynamic "Save Note" / "Update Note" button based on context.
-
--   Seamless **automatic migration** of existing notes from `wp_options`.
-
--   **Admin bar fallback** allows manual migration trigger if needed.
-
--   Future-proof cleanup logic to remove legacy data in v1.3.2+.
+Tokens avaliable Since 1.3.0
+----------------------------
 
 This extension now exposes **three** tokens so you can choose the right output
 for your report/email workflow:
@@ -66,6 +100,10 @@ for your report/email workflow:
 
 -   **[client.customwork.notes_email]** — Email-safe output using **inline
     styles** only (broad email client compatibility).
+
+ 
+
+ 
 
 ### Quick examples
 
@@ -99,15 +137,20 @@ Example Styles applied
 
  
 
-**Email token (inline styles):**
+**Email token (inline styles): **
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ html
 [client.customwork.notes_email]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Example Branded Email token filter styled
+Example Branded Email token filter styled this works also with the client report
+extension if you don’t use pro-reports
+
+ 
 
 ![](https://raw.githubusercontent.com/stingray82/repo-images/main/Mainwp-work-notes-pro-report/mainwp-client-report-email-tokens-branded.png)
+
+ 
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ php
 add_filter( 'mainwp_client_notes_email_modes', function( $modes ) {
@@ -131,12 +174,18 @@ add_filter( 'mainwp_client_notes_email_active_mode', function( $mode ) {
 }, 10, 1 );
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+ 
+
 Works without extra CSS and stays compatible with most email clients.
 
 Developer Hooks (Filters)
 -------------------------
 
+ 
+
 You can tailor both the class-based and email tokens without editing core.
+
+ 
 
 ### Columns
 
@@ -151,6 +200,8 @@ add_filter( 'mainwp_client_notes_columns', function( $cols ) {
 } );
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+ 
+
 ### Per-cell HTML (both tokens)
 
 Modify or decorate cell content (icons, badges, etc.).
@@ -164,6 +215,8 @@ add_filter( 'mainwp_client_notes_cell_content', function( $html, $key, $note ) {
     return '• ' . $html;
 }, 10, 3 );
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ 
 
 ### Class-based token: classes
 
@@ -180,6 +233,8 @@ add_filter( 'mainwp_client_notes_table_classes', function( $classes ) {
 } );
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+ 
+
 ### Class-based token: attributes
 
 Add arbitrary attributes (ids, data-\*).
@@ -191,6 +246,8 @@ add_filter( 'mainwp_client_notes_table_attributes', function( $attrs ) {
     return $attrs;
 } );
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ 
 
 ### Email token: inline styles
 
@@ -209,6 +266,8 @@ add_filter( 'mainwp_client_notes_email_styles', function( $s ) {
 } );
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+ 
+
 ### Email token: per-row styles
 
 Compute backgrounds (or future row-level props) per row/note.
@@ -224,36 +283,15 @@ add_filter( 'mainwp_client_notes_email_row_styles', function( $row_styles, $row,
 }, 10, 3 );
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+ 
+
 Which token should I use?
 -------------------------
 
 -   **Reports/PDFs** (support for CSS): use `[client.customwork.notes_table]`
     and add CSS.
 
--   **Emails** (no CSS support): use `[client.customwork.notes_email]`.
+-   **Emails & Client Reports (Not Pro-Report)** (no CSS support): use
+    `[client.customwork.notes_email]`.
 
 -   **Legacy templates**: continue using `[client.customwork.notes]`.  
-
- 
-
-**Upgrade Notes (1.3.0-beta)**
-
--   **Strict Date Validation:**  
-    Work Notes will now only save if the date is in strict `YYYY-MM-DD` format
-    (selected via the date picker). Manually typed dates that don’t match this
-    format will be rejected.  
-    → If you see an “Invalid date format” error, reselect the date using the
-    picker.
-
--   **Database Safety Improvements:**  
-    All queries for saving, loading, and deleting notes are now fully
-    parameterized to improve security and stability.
-
--   **Migration Toolbar Reliability:**  
-    The admin toolbar migration button now loads its JavaScript more reliably.
-    If legacy wp_options-based notes still exist, migration should complete
-    smoothly.
-
--   **Date Picker UX Fixes:**  
-    JavaScript handling has been updated to avoid deprecated jQuery shorthands
-    and to better sync Flatpickr with manual date input.
