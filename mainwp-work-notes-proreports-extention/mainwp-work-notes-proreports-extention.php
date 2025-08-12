@@ -14,7 +14,7 @@
  * Website:           https://reallyusefulplugins.com
  */
 
-include_once 'mainwp-work-notes.php';
+require_once __DIR__ . '/mainwp-work-notes.php';
 class MainWP_Client_Notes_Proreport_Extension {
 
 
@@ -32,55 +32,7 @@ class MainWP_Client_Notes_Proreport_Extension {
 		load_plugin_textdomain( 'mainwp-client-notes-pro-reports-extention', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 	}
 
-	// AJAX handler to load the Work Notes form in the sitetab
-public function load_work_notes_form() {
-    $site_id = intval($_POST['site_id']);
-
-    // Fetch existing notes
-    $notes_key = 'mainwp_work_notes_' . $site_id;
-    $notes = get_option($notes_key, array());
-
-    // Render the form and notes inside the sitetab
-    ?>
-    <div class="ui form">
-        <h3 class="ui dividing header">Work Notes</h3>
-        <form id="work-note-form">
-            <input type="hidden" name="site_id" value="<?php echo esc_attr($site_id); ?>">
-            <label for="work_notes_date">Work Date:</label>
-            <input type="date" name="work_notes_date" value="" required>
-            <label for="work_notes_content">Work Content:</label>
-            <textarea name="work_notes_content" required></textarea>
-            <button type="submit" class="ui button green">Save Note</button>
-        </form>
-
-        <h3>Existing Work Notes</h3>
-        <table class="ui celled table">
-            <thead><tr><th>Date</th><th>Content</th><th>Actions</th></tr></thead>
-            <tbody>
-                <?php if (!empty($notes)) : ?>
-                    <?php foreach ($notes as $index => $note) : ?>
-                        <tr>
-                            <td><?php echo esc_html($note['date']); ?></td>
-                            <td><?php echo esc_html($note['content']); ?></td>
-                            <td>
-                                <a href="#" class="edit-note" data-noteid="<?php echo esc_attr($index); ?>">Edit</a>
-                                <a href="#" class="delete-note" data-noteid="<?php echo esc_attr($index); ?>">Delete</a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php else : ?>
-                    <tr><td colspan="3">No work notes found.</td></tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-    <?php
-    wp_die();  // End AJAX request
-}
-
-
-
-    public function admin_init() {
+	public function admin_init() {
     	register_setting('mainwp_client_notes_proreport_options_group', 'mainwp_client_notes_proreport_allow_prerelease');
 	}
 
@@ -132,7 +84,6 @@ public function load_work_notes_form() {
 	 */
 	public function render_site_page_settings() {
 		do_action( 'mainwp_pageheader_sites', 'ClientNotesProReport' );
-		$this->render_site_tasks_tabs();
 		do_action( 'mainwp_pagefooter_sites', 'ClientNotesProReport' );
 	}
 
@@ -270,6 +221,11 @@ add_filter(
     'uupd/metadata_result',
     function ($meta, $slug) {
 
+        if ( ! function_exists('is_plugin_active') ) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+
         // Get installed version (works for both plugins & themes)
         if (is_plugin_active($slug . '/' . $slug . '.php')) {
             // Plugin case
@@ -308,3 +264,19 @@ add_filter(
     10,
     2
 );
+
+register_activation_hook(__FILE__, function ($network_wide) {
+    if (is_multisite() && $network_wide) {
+        // Create table for each site on network activation
+        $sites = get_sites(['fields' => 'ids']);
+        foreach ($sites as $site_id) {
+            switch_to_blog($site_id);
+            \MainWP\Dashboard\MainWP_Work_Notes::create_work_notes_table();
+            restore_current_blog();
+        }
+    } else {
+        \MainWP\Dashboard\MainWP_Work_Notes::create_work_notes_table();
+    }
+});
+
+

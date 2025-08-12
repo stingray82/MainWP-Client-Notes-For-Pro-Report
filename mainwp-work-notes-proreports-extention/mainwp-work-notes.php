@@ -13,56 +13,47 @@ class MainWP_Work_Notes {
      * Initialize plugin hooks.
      */
     public static function init() {
-        // Add subpage for each child site
-        add_filter('mainwp_getsubpages_sites', [__CLASS__, 'add_sub_menu'], 10, 1);
+    // Add subpage for each child site
+    add_filter('mainwp_getsubpages_sites', [__CLASS__, 'add_sub_menu'], 10, 1);
 
-        // Enqueue assets
-        add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
+    // Enqueue assets
+    add_action('admin_enqueue_scripts', [__CLASS__, 'enqueue_assets']);
 
-        // Core AJAX handlers
-        add_action('wp_ajax_save_work_note', [__CLASS__, 'ajax_save_work_note_action']);
-        add_action('wp_ajax_delete_work_note', [__CLASS__, 'ajax_delete_work_note_action']);
-        add_action('wp_ajax_load_work_note', [__CLASS__, 'ajax_load_work_note_action']);
-        add_action('wp_ajax_load_work_notes_form', [__CLASS__, 'ajax_load_work_notes_form']);
+    // Core AJAX handlers
+    add_action('wp_ajax_save_work_note',    [__CLASS__, 'ajax_save_work_note_action']);
+    add_action('wp_ajax_delete_work_note',  [__CLASS__, 'ajax_delete_work_note_action']);
+    add_action('wp_ajax_load_work_note',    [__CLASS__, 'ajax_load_work_note_action']);
+    add_action('wp_ajax_load_work_notes_form', [__CLASS__, 'ajax_load_work_notes_form']);
 
-        // DB table creation
-        register_activation_hook(__FILE__, [__CLASS__, 'create_work_notes_table']);
+    // === Migration Hooks (Temporary, can be removed in a future version) ===
+    add_action('admin_init', function () {
+        // Only run if we're in admin and can manage
+        if ( ! is_admin() || ! current_user_can('manage_options') ) {
+            return;
+        }
 
+        $plugin_ver = defined('RUP_MAINWP_CLIENT_NOTES_VERSION')
+            ? RUP_MAINWP_CLIENT_NOTES_VERSION
+            : '0.0.0';
 
-        /**
-         * 
-         *  Delete from version 1.3.5 onwards This is a future clean up logic
-         * 
-         */
+        // Handle first-run migration (until 1.3.2)
+        if (
+            version_compare($plugin_ver, self::CLEANUP_REMOVE_MIGRATION_LOGIC_VERSION, '<') &&
+            ! get_option('mainwp_work_notes_migrated')
+        ) {
+            self::maybe_auto_migrate_legacy_notes();
+        }
 
-        /**
-         * === Migration Hooks (Temporary, can be removed in a future version) ===
-         * Delay check until after pluggable functions are available
-         */
-                add_action('admin_init', function () {
-                    // Only run if we're in admin and can manage
-                    if (!is_admin() || !current_user_can('manage_options')) {
-                        return;
-                    }
+        // Cleanup legacy options in 1.3.4+
+        if (
+            version_compare($plugin_ver, self::CLEANUP_DELETE_LEGACY_OPTIONS_VERSION, '>=') &&
+            get_option('mainwp_work_notes_migrated')
+        ) {
+            self::maybe_delete_legacy_options();
+        }
+    });
+}
 
-                    // Handle first-run migration (until 1.3.2)
-                    if (
-                        version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_REMOVE_MIGRATION_LOGIC_VERSION, '<') &&
-                        !get_option('mainwp_work_notes_migrated')
-                    ) {
-                        self::maybe_auto_migrate_legacy_notes();
-                    }
-
-                    // Cleanup legacy options in 1.3.4+
-                    if (
-                        version_compare(RUP_MAINWP_CLIENT_NOTES_VERSION, self::CLEANUP_DELETE_LEGACY_OPTIONS_VERSION, '>=') &&
-                        get_option('mainwp_work_notes_migrated')
-                    ) {
-                        self::maybe_delete_legacy_options();
-                    }
-                }); 
-
-    } 
           
 
 
@@ -258,8 +249,7 @@ class MainWP_Work_Notes {
     public static function enqueue_assets() {
         wp_enqueue_editor();
         wp_enqueue_style('flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css');
-        wp_enqueue_script('flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr', [], null, true);
-
+        wp_enqueue_script('flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js', [], null, true);
         wp_enqueue_script('mainwp-work-notes-js', plugins_url('mainwp-work-notes.js', __FILE__), ['jquery', 'flatpickr-js'], null, true);
         wp_localize_script('mainwp-work-notes-js', 'mainwpWorkNotes', [
             'ajax_url' => admin_url('admin-ajax.php'),
@@ -274,10 +264,23 @@ class MainWP_Work_Notes {
      * Convert WP date format to Flatpickr-compatible format.
      */
     private static function get_js_date_format() {
-        $php_format = get_option('date_format');
-        $map = ['F' => 'F', 'M' => 'M', 'm' => 'm', 'n' => 'n', 'd' => 'd', 'j' => 'j', 'Y' => 'Y', 'y' => 'y'];
-        return strtr($php_format, $map);
-    }
+    // Map a reasonable subset of WP date tokens to Flatpickr
+    $php = get_option('date_format');
+    $map = [
+        // Months
+        'F' => 'F', 'M' => 'M', 'm' => 'm', 'n' => 'n',
+        // Days
+        'd' => 'd', 'j' => 'j',
+        // Years
+        'Y' => 'Y', 'y' => 'y',
+        // Ordinal day (WP’s jS) -> Flatpickr doesn’t support ordinals; fall back to j
+        'S' => '', // strip the ordinal suffix
+    ];
+    // naive transliteration: replace jS with j first, then map rest
+    $php = preg_replace('/jS/', 'j', $php);
+    return strtr($php, $map);
+}
+
 
     /**
      * AJAX: Save or update a work note.
@@ -332,27 +335,34 @@ class MainWP_Work_Notes {
         wp_send_json_error(['message' => 'Invalid note ID.']);
     }
 
-    /**
+   /**
      * AJAX: Load a specific note for editing.
      */
     public static function ajax_load_work_note_action() {
         check_ajax_referer('work_notes_nonce', 'nonce');
-        if (!current_user_can('manage_options')) wp_send_json_error(['message' => 'Insufficient permissions.']);
+        if ( ! current_user_can('manage_options') ) {
+            wp_send_json_error(['message' => 'Insufficient permissions.']);
+        }
 
         global $wpdb;
-        $id = isset($_POST['note_id']) ? intval($_POST['note_id']) : 0;
+        $id = isset($_POST['note_id']) ? absint($_POST['note_id']) : 0;
 
-        $note = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}mainwp_work_notes WHERE id = %d",
-            $id
-        ), ARRAY_A);
+        $table = $wpdb->prefix . 'mainwp_work_notes';
+        $note  = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM $table WHERE id = %d", $id),
+            ARRAY_A
+        );
 
-        if ($note) {
-            wp_send_json_success(['date' => $note['work_date'], 'content' => $note['content']]);
+        if ( $note ) {
+            wp_send_json_success([
+                'date'    => $note['work_date'],
+                'content' => $note['content'],
+            ]);
         } else {
             wp_send_json_error(['message' => 'Note not found.']);
         }
     }
+
 
     /**
      * AJAX: Load the full table of notes (after save/delete).
