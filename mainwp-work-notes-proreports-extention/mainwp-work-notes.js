@@ -128,7 +128,22 @@ jQuery(document).ready(function ($) {
   $saveBtn.off('click').on('click', function () {
     const noteIdVal = $noteId.val();
     const wpid = $siteId.val();
-    const dateVal = $date.val(); // Flatpickr keeps the original input value in sync
+    // Gate Manual Entry
+    let dateVal = $date.val();
+    if (window.workNotesFlatpickrInstance) {
+      const fp = window.workNotesFlatpickrInstance;
+
+      // Prefer the selected date if present
+      if (fp.selectedDates && fp.selectedDates[0]) {
+        dateVal = fp.formatDate(fp.selectedDates[0], 'Y-m-d');
+      } else if (fp.altInput && fp.altInput.value) {
+        // If user typed into the alt input, parse it using altFormat
+        const parsed = fp.parseDate(fp.altInput.value, fp.config.altFormat);
+        if (parsed) {
+          dateVal = fp.formatDate(parsed, 'Y-m-d');
+        }
+      }
+    }
     const content = getEditorContent();
 
     $.post(window.mainwpWorkNotes.ajax_url, {
@@ -154,12 +169,25 @@ jQuery(document).ready(function ($) {
   // ---- Init Flatpickr if present
   if (typeof window.flatpickr !== 'undefined') {
     window.workNotesFlatpickrInstance = flatpickr('#work_notes_date', {
-      dateFormat: 'Y-m-d',
-      altInput: true,
-      altFormat: (window.mainwpWorkNotes && mainwpWorkNotes.date_format) || 'd/m/Y',
-      defaultDate: $date.val() || (window.mainwpWorkNotes && mainwpWorkNotes.today) || null,
-      allowInput: true
-    });
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: (window.mainwpWorkNotes && mainwpWorkNotes.date_format) || 'd/m/Y',
+    defaultDate: $date.val() || (window.mainwpWorkNotes && mainwpWorkNotes.today) || null,
+    allowInput: true,
+    onChange: function (selectedDates, _str, inst) {
+      if (selectedDates[0]) {
+        $date.val(inst.formatDate(selectedDates[0], 'Y-m-d')).trigger('change');
+      }
+    },
+    onClose: function (_selectedDates, _str, inst) {
+      if (inst.altInput && inst.altInput.value) {
+        const parsed = inst.parseDate(inst.altInput.value, inst.config.altFormat);
+        if (parsed) {
+          $date.val(inst.formatDate(parsed, 'Y-m-d')).trigger('change');
+        }
+      }
+    }
+  });
   }
 
   // ---- Kick things off

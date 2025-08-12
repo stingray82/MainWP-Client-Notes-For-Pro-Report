@@ -295,6 +295,12 @@ class MainWP_Work_Notes {
         $site_id = isset($_POST['wpid']) ? intval($_POST['wpid']) : 0;
         $note_id = isset($_POST['note_id']) ? intval($_POST['note_id']) : -1;
         $date = sanitize_text_field($_POST['work_notes_date']);
+        // Validate strict Y-m-d aiming for consisant storage here.
+        $dt = \DateTime::createFromFormat('Y-m-d', $date);
+        $valid = $dt && $dt->format('Y-m-d') === $date;
+        if ( ! $valid ) {
+            wp_send_json_error(['message' => 'Invalid date format. Please use the date picker.']);
+        }
         $content = wp_kses_post($_POST['work_notes_content']);
 
         if (!$site_id || !$date) wp_send_json_error(['message' => 'Missing data.']);
@@ -326,9 +332,9 @@ class MainWP_Work_Notes {
 
         global $wpdb;
         $id = isset($_POST['note_id']) ? intval($_POST['note_id']) : 0;
-
+        $table = $wpdb->prefix . 'mainwp_work_notes';
         if ($id > 0) {
-            $wpdb->delete($wpdb->prefix . 'mainwp_work_notes', ['id' => $id]);
+            $wpdb->delete($table, ['id' => $id]);
             wp_send_json_success(['message' => 'Note deleted successfully.']);
         }
 
