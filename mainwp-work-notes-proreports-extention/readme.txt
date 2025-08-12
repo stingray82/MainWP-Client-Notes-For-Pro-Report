@@ -4,7 +4,7 @@ Donate link: https://reallyusefulplugins.com/donate
 Tags: MainWP, ClientNotes, Pro-report
 Requires at least: 6.5
 Tested up to: 6.8.2
-Stable tag: 1.3.0-alpha.2
+Stable tag: 1.3.0-beta
 Requires PHP: 8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,24 +24,33 @@ Install on your dashboard within client sites you will now have a new area to ad
 == Changelog ==
 1.3.0
 New:
-- Migration system to move existing Work Notes from wp_options to a dedicated database table (wp_mainwp_work_notes)
-- Admin toolbar button to trigger migration (only visible to admins if migration hasn't yet run)
-- Support for Flatpickr-powered date selection with WordPress-compatible display format
-- Automatically populate today’s date when creating a new note
-- Version-based logic to clean up legacy data and remove migration code in future versions
+-Migration system to move existing Work Notes from wp_options to a dedicated database table (wp_mainwp_work_notes).
+-Admin toolbar button to trigger migration (only visible to admins if migration hasn’t yet run).
+-Support for Flatpickr-powered date selection with WordPress-compatible display format.
+-Automatically populate today’s date when creating a new note.
+-Version-based logic to clean up legacy data and remove migration code in future versions.
+-Pro Reports integration now supports multiple token formats:
+-- [client.customwork.notes] (legacy table)
+-- [client.customwork.notes_table] (CSS-stylable)
+-- [client.customwork.notes_email] (email-safe, with mode support: default, compact, bordered).
+- Email mode system for Pro Reports allows themeable layouts and site/report-based overrides.
 
 Changed:
-- Work Notes are now saved, retrieved, and displayed from a dedicated database table for performance and scalability
-- JS form handling improved:
-  - Notes load correctly into the editor and date field when editing
-  - Form resets after save with today's date pre-filled
-  - Save button label dynamically changes between "Save Note" and "Update Note" based on context
+-Work Notes are now saved, retrieved, and displayed from a dedicated database table for performance and scalability.
+-JS form handling improved:
+-Notes load correctly into the editor and date field when editing.
+-Form resets after save with today’s date pre-filled.
+-Save button label dynamically changes between “Save Note” and “Update Note” based on context.
+-Manual date entry is gated — only valid YYYY-MM-DD formats from the picker will save.
+-Database queries for loading and deleting notes are now fully parameterized for security and stability.
+-Migration JS injection improved for more reliable toolbar button behavior.
 
 Clean-up:
-- Migration logic grouped and documented for future removal in v1.3.2
-- Legacy wp_options notes will be removed automatically in v1.3.4+
-- Date picker logic centralized and fallback-safe
-- Enhanced UI interactivity with better error handling and feedback
+-Migration logic grouped and documented for future removal in v1.3.2.
+-Legacy wp_options notes will be removed automatically in v1.3.4+.
+-Date picker logic centralized, fallback-safe, and synced with alt inputs.
+-Enhanced UI interactivity with better error handling and user feedback.
+-Minor code cleanups for consistency (no functional change).
 
 1.2.5
 New: Added Support for Preleases
