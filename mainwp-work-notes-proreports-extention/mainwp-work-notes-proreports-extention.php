@@ -5,7 +5,7 @@
  * Tested up to:      6.8.2
  * Requires at least: 6.5
  * Requires PHP:      8.0
- * Version:           1.3.0-rc
+ * Version:           1.3.0-rc.1
  * Author:            reallyusefulplugins.com
  * Author URI:        https://reallyusefulplugins.com
  * License:           GPL-2.0-or-later
@@ -106,6 +106,26 @@ class MainWP_Client_Pro_Report_Notes_Activator {
 	protected $plugin_handle = 'mainwp-work-notes-proreports-extention';
 
 
+
+	private function mainwp_tables_ready(): bool {
+	    global $wpdb;
+	    $need = [
+	        $wpdb->prefix . 'mainwp_wp',
+	        $wpdb->prefix . 'mainwp_api_keys',
+	    ];
+	    foreach ($need as $table) {
+	        $exists = $wpdb->get_var( $wpdb->prepare(
+	            "SHOW TABLES LIKE %s", $table
+	        ) );
+	        if ($exists !== $table) {
+	            return false;
+	        }
+	    }
+	    return true;
+	}
+
+
+
 	public function __construct() {
 		$this->childFile = __FILE__;
 		add_filter( 'mainwp_getextensions', array( &$this, 'get_this_extension' ) );
@@ -150,17 +170,36 @@ class MainWP_Client_Pro_Report_Notes_Activator {
 
 	// The function "activate_this_plugin" is called when the main is initialized.
 	function activate_this_plugin() {
-		// Checking if the MainWP plugin is enabled. This filter will return true if the main plugin is activated.
-		$this->mainwpClientNotesProReportActivated = apply_filters( 'mainwp_activated_check', $this->mainwpClientNotesProReportActivated );
+	    // Is MainWP active?
+	    $this->mainwpClientNotesProReportActivated = apply_filters(
+	        'mainwp_activated_check', $this->mainwpClientNotesProReportActivated
+	    );
 
-		// The 'mainwp_extension_enabled_check' hook. If the plugin is not enabled this will return false,
-		// if the plugin is enabled, an array will be returned containing a key.
-		// This key is used for some data requests to our main
-		$this->childEnabled = apply_filters( 'mainwp_extension_enabled_check', __FILE__ );
+	    // If MainWP isn’t active, wait for mainwp_activated action as you already do.
+	    if ( $this->mainwpClientNotesProReportActivated === false ) {
+	        add_action( 'mainwp_activated', [ $this, 'activate_this_plugin' ] );
+	        return;
+	    }
 
-		$this->childKey = $this->childEnabled['key'];
+	    // Is the extension enabled?
+	    $this->childEnabled = apply_filters( 'mainwp_extension_enabled_check', __FILE__ );
+	    if ( empty( $this->childEnabled ) || empty( $this->childEnabled['key'] ) ) {
+	        return; // not enabled yet
+	    }
+	    $this->childKey = $this->childEnabled['key'];
 
-		new MainWP_Client_Notes_Proreport_Extension();
+	    // NEW: Make sure MainWP core tables exist before continuing
+	    if ( ! $this->mainwp_tables_ready() ) {
+	        add_action( 'admin_notices', function () {
+	            echo '<div class="error"><p>'
+	                . esc_html__( 'MainWP core database tables have not been created yet. Please (re)activate the MainWP Dashboard plugin to let it install its tables, then activate this extension.', 'mainwp-client-notes-pro-reports-extention' )
+	                . '</p></div>';
+	        } );
+	        return;
+	    }
+
+	    // Safe to initialize the extension
+	    new MainWP_Client_Notes_Proreport_Extension();
 	}
 
 	function mainwp_error_notice() {
@@ -183,7 +222,7 @@ global $mainwpclientnotesproreportExtensionActivator;
 $mainwpclientnotesproreportExtensionActivator = new MainWP_Client_Pro_Report_Notes_Activator();
 
 // Define plugin constants
-define('RUP_MAINWP_CLIENT_NOTES_VERSION', '1.3.0-rc');
+define('RUP_MAINWP_CLIENT_NOTES_VERSION', '1.3.0-rc.1');
 
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -210,15 +249,53 @@ add_action( 'plugins_loaded', function() {
 
 
 
-Old  Filter
+// Old Filter
 add_filter('uupd/allow_prerelease/mainwp-client-notes-pro-reports-extention', function ($allow) {
     return get_option('mainwp_client_notes_proreport_allow_prerelease') === 'yes';
 }, 5);
 
 
+//activation gate: fail early with a message instead of a fatal.
 register_activation_hook(__FILE__, function ($network_wide) {
+    if ( ! function_exists('apply_filters') ) {
+        return; // shouldn't happen, but be defensive
+    }
+
+    // Is MainWP Dashboard even active?
+    $mainwp_active = apply_filters('mainwp_activated_check', false);
+    if ( ! $mainwp_active ) {
+        wp_die(
+            esc_html__('Please activate the MainWP Dashboard plugin first, then activate this extension.', 'mainwp-client-notes-pro-reports-extention'),
+            400
+        );
+    }
+
+    // Are MainWP core tables present?
+    global $wpdb;
+    $need = [
+        $wpdb->prefix . 'mainwp_wp',
+        $wpdb->prefix . 'mainwp_api_keys',
+    ];
+
+    // Don’t fatal on broken DB; just check quietly.
+    $wpdb->suppress_errors(true);
+    foreach ($need as $table) {
+        $exists = $wpdb->get_var( $wpdb->prepare('SHOW TABLES LIKE %s', $table) );
+        if ($exists !== $table) {
+            wp_die(
+                sprintf(
+                    /* translators: %s is a table name */
+                    esc_html__('MainWP table missing: %s. Please (re)activate the MainWP Dashboard so it can create its database tables, then try activating this extension again.', 'mainwp-client-notes-pro-reports-extention'),
+                    esc_html($table)
+                ),
+                400
+            );
+        }
+    }
+    $wpdb->suppress_errors(false);
+
+    // ok to create here; harmless if exists
     if (is_multisite() && $network_wide) {
-        // Create table for each site on network activation
         $sites = get_sites(['fields' => 'ids']);
         foreach ($sites as $site_id) {
             switch_to_blog($site_id);
@@ -229,5 +306,4 @@ register_activation_hook(__FILE__, function ($network_wide) {
         \MainWP\Dashboard\MainWP_Work_Notes::create_work_notes_table();
     }
 });
-
 

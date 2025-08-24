@@ -20,6 +20,7 @@ Changed:
 -Manual date entry is gated — only valid YYYY-MM-DD formats from the picker will save.
 -Database queries for loading and deleting notes are now fully parameterized for security and stability.
 -Migration JS injection improved for more reliable toolbar button behavior.
+-Added additional activation guards for new installs where tables haven't finished being created in MainWP
 
 Clean-up:
 -Migration logic grouped and documented for future removal in v1.3.2.
