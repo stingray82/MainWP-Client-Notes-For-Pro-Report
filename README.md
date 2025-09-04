@@ -37,7 +37,7 @@ Usage Instructions
 
     ![Rendered Code](https://github.com/stingray82/repo-images/raw/main/Mainwp-work-notes-pro-report/Rendered_Code.png)
 
-Coming in v1.3.0
+v1.3.0
 ----------------
 
 -   Notes are now saved to a **dedicated database table**
