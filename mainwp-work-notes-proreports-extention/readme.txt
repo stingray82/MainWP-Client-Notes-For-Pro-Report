@@ -3,8 +3,8 @@ Contributors: reallyusefulplugins
 Donate link: https://reallyusefulplugins.com/donate
 Tags: MainWP, ClientNotes, Pro-report
 Requires at least: 6.5
-Tested up to: 6.8.2
-Stable tag: 1.3.0
+Tested up to: 6.9.4
+Stable tag: 1.3.1
 Requires PHP: 8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -22,6 +22,10 @@ Install on your dashboard within client sites you will now have a new area to ad
 == Frequently Asked Questions ==
 
 == Changelog ==
+1.3.1
+Update: Updater to 2.0-Alpha.1
+Update: Compatibility
+
 1.3.0
 New:
 -Migration system to move existing Work Notes from wp_options to a dedicated database table (wp_mainwp_work_notes).

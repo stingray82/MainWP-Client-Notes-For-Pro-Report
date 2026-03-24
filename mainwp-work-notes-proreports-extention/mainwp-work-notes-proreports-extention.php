@@ -2,10 +2,10 @@
 /**
  * Plugin Name:       MainWP Client Notes Pro Report Extension
  * Description:       This adds client notes to your pro report
- * Tested up to:      6.8.2
+ * Tested up to:      6.9.4
  * Requires at least: 6.5
  * Requires PHP:      8.0
- * Version:           1.3.0
+ * Version:           1.3.1
  * Author:            reallyusefulplugins.com
  * Author URI:        https://reallyusefulplugins.com
  * License:           GPL-2.0-or-later
@@ -222,7 +222,7 @@ global $mainwpclientnotesproreportExtensionActivator;
 $mainwpclientnotesproreportExtensionActivator = new MainWP_Client_Pro_Report_Notes_Activator();
 
 // Define plugin constants
-define('RUP_MAINWP_CLIENT_NOTES_VERSION', '1.3.0');
+define('RUP_MAINWP_CLIENT_NOTES_VERSION', '1.3.1');
 
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -235,6 +235,7 @@ add_action( 'plugins_loaded', function() {
 
     // 2) Build a single $updater_config array:
     $updater_config = [
+    	'vendor'	  => 'RUP',
         'plugin_file' => plugin_basename( __FILE__ ),             // e.g. "simply-static-export-notify/simply-static-export-notify.php"
         'slug'        => 'mainwp-client-notes-pro-reports-extention',           // must match your updater‐server slug
         'name'        => 'MainWP Client Notes Pro Report Extension',         // human‐readable plugin name
@@ -244,7 +245,7 @@ add_action( 'plugins_loaded', function() {
     ];
 
     // 3) Call the helper in the UUPD\V1 namespace:
-    \RUP\Updater\Updater_V1::register( $updater_config );
+    \RUP\Updater\Updater_V2::register( $updater_config );
 }, 20 );
 
 
