@@ -5,7 +5,7 @@
  * Tested up to:      6.9.4
  * Requires at least: 6.5
  * Requires PHP:      8.0
- * Version:           1.3.1
+ * Version:           1.3.2-alpha
  * Author:            reallyusefulplugins.com
  * Author URI:        https://reallyusefulplugins.com
  * License:           GPL-2.0-or-later
@@ -222,7 +222,7 @@ global $mainwpclientnotesproreportExtensionActivator;
 $mainwpclientnotesproreportExtensionActivator = new MainWP_Client_Pro_Report_Notes_Activator();
 
 // Define plugin constants
-define('RUP_MAINWP_CLIENT_NOTES_VERSION', '1.3.1');
+define('RUP_MAINWP_CLIENT_NOTES_VERSION', '1.3.2-alpha');
 
 
 // ──────────────────────────────────────────────────────────────────────────
