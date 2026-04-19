@@ -250,13 +250,10 @@ add_action( 'plugins_loaded', function() {
 
 
 
-// Old Filter
-add_filter('uupd/allow_prerelease', function ($allow, $vendor, $slug) {
-    if ($vendor === 'rup' && $slug === 'mainwp-client-notes-pro-reports-extention') {
-        return get_option('mainwp_client_notes_proreport_allow_prerelease') === 'yes';
-    }
-    return $allow;
-}, 5, 3);
+// New Filter (Scoped)
+add_filter( 'uupd/allow_prerelease/rup/mainwp-client-notes-pro-reports-extention', function( $allow, $vendor, $slug, $instance_key ) {
+    return get_option( 'mainwp_client_notes_proreport_allow_prerelease' ) === 'yes';
+}, 10, 4 );
 
 //activation gate: fail early with a message instead of a fatal.
 register_activation_hook(__FILE__, function ($network_wide) {
