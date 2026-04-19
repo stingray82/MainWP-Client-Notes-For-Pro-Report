@@ -4,7 +4,7 @@ Donate link: https://reallyusefulplugins.com/donate
 Tags: MainWP, ClientNotes, Pro-report
 Requires at least: 6.5
 Tested up to: 6.9.4
-Stable tag: 1.3.1
+Stable tag: 1.3.2-alpha
 Requires PHP: 8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
