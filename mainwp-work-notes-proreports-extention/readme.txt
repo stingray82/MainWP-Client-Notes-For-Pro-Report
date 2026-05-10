@@ -4,7 +4,7 @@ Donate link: https://reallyusefulplugins.com/donate
 Tags: MainWP, ClientNotes, Pro-report
 Requires at least: 6.5
 Tested up to: 6.9.4
-Stable tag: 1.3.2-beta.1
+Stable tag: 1.3.2-beta.2
 Requires PHP: 8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -22,6 +22,9 @@ Install on your dashboard within client sites you will now have a new area to ad
 == Frequently Asked Questions ==
 
 == Changelog ==
+1.3.2 - Beta.2
+Fix issues with JS not loading only where needed
+
 1.3.1
 Update: Updater to 2.0-Alpha.1
 Update: Compatibility

@@ -6,6 +6,10 @@ jQuery(document).ready(function ($) {
   const $contentTA = $('textarea[name="work_notes_content"]');
   const $saveBtn = $('#save-work-note');
 
+  if (!$('#work_notes_date').length || !$('#save-work-note').length) {
+	  return;
+	}
+
   // ---- Helpers
   function getEditorContent() {
     const ed = window.tinyMCE ? tinyMCE.get('work_notes_content') : null;
@@ -130,7 +134,10 @@ jQuery(document).ready(function ($) {
     const wpid = $siteId.val();
     // Gate Manual Entry
     let dateVal = $date.val();
-    if (window.workNotesFlatpickrInstance) {
+    if (
+	  window.workNotesFlatpickrInstance &&
+	  typeof window.workNotesFlatpickrInstance.setDate === 'function'
+	) {
       const fp = window.workNotesFlatpickrInstance;
 
       // Prefer the selected date if present

@@ -245,8 +245,18 @@ class MainWP_Work_Notes {
 
     /**
      * Enqueue editor, Flatpickr, and JS assets.
+     *
+     * Only needed on the individual site Work Notes page:
+     * /wp-admin/admin.php?page=ManageSitesWorkNotes&id=XXXX
      */
     public static function enqueue_assets() {
+        $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        $id   = isset($_GET['id']) ? absint($_GET['id']) : 0;
+
+        if ($page !== 'ManageSitesWorkNotes' || $id <= 0) {
+            return;
+        }
+
         wp_enqueue_editor();
         wp_enqueue_style('flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css');
         wp_enqueue_script('flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js', [], null, true);
