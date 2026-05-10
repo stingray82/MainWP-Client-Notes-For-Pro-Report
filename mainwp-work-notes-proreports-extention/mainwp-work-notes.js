@@ -6,9 +6,10 @@ jQuery(document).ready(function ($) {
   const $contentTA = $('textarea[name="work_notes_content"]');
   const $saveBtn = $('#save-work-note');
 
-  if (!$('#work_notes_date').length || !$('#save-work-note').length) {
-	  return;
-	}
+  // Only run on the actual Work Notes page
+  if (!$date.length || !$saveBtn.length) {
+    return;
+  }
 
   // ---- Helpers
   function getEditorContent() {
@@ -18,17 +19,27 @@ jQuery(document).ready(function ($) {
 
   function setEditorContent(html) {
     const ed = window.tinyMCE ? tinyMCE.get('work_notes_content') : null;
-    if (ed) ed.setContent(html || '');
+
+    if (ed) {
+      ed.setContent(html || '');
+    }
+
     $contentTA.val(html || '');
   }
 
   function setDateInput(value, triggerChange = true) {
     // Prefer Flatpickr API when available
-    if (window.workNotesFlatpickrInstance) {
-      window.workNotesFlatpickrInstance.setDate(value || null, true); // true => triggerChange
+    if (
+      window.workNotesFlatpickrInstance &&
+      typeof window.workNotesFlatpickrInstance.setDate === 'function'
+    ) {
+      window.workNotesFlatpickrInstance.setDate(value || null, triggerChange);
     } else {
       $date.val(value || '');
-      if (triggerChange) $date.trigger('change');
+
+      if (triggerChange) {
+        $date.trigger('change');
+      }
     }
   }
 
@@ -44,7 +55,11 @@ jQuery(document).ready(function ($) {
     $saveBtn.text('Save Work Note');
 
     // Reset date to today where possible
-    const today = (window.mainwpWorkNotes && mainwpWorkNotes.today) ? mainwpWorkNotes.today : '';
+    const today = (
+      window.mainwpWorkNotes &&
+      mainwpWorkNotes.today
+    ) ? mainwpWorkNotes.today : '';
+
     setDateInput(today, true);
 
     // Clear editor
@@ -59,12 +74,22 @@ jQuery(document).ready(function ($) {
       nonce: window.mainwpWorkNotes.nonce,
       site_id: wpid
     }).done(function (response) {
-      if (response && response.success && response.data && response.data.html) {
+      if (
+        response &&
+        response.success &&
+        response.data &&
+        response.data.html
+      ) {
         $('.ui.celled.table tbody').replaceWith(response.data.html);
-        // Using delegated handlers below, so no need to rebind, but call just in case
+
+        // Using delegated handlers below, so no need to rebind,
+        // but call just in case
         bindWorkNotesEvents();
       } else {
-        alert((response && response.data && response.data.message) || 'Failed to reload notes.');
+        alert(
+          (response && response.data && response.data.message) ||
+          'Failed to reload notes.'
+        );
       }
     }).fail(function () {
       alert('Failed to reload notes.');
@@ -73,84 +98,106 @@ jQuery(document).ready(function ($) {
 
   function bindWorkNotesEvents() {
     // EDIT note
-    $(document).off('click', '.edit-note').on('click', '.edit-note', function () {
-      const noteIdVal = $(this).data('note-id');
-      const wpid = $siteId.val();
+    $(document)
+      .off('click', '.edit-note')
+      .on('click', '.edit-note', function () {
+        const noteIdVal = $(this).data('note-id');
+        const wpid = $siteId.val();
 
-      $.post(window.mainwpWorkNotes.ajax_url, {
-        action: 'load_work_note',
-        nonce: window.mainwpWorkNotes.nonce,
-        wpid: wpid,
-        note_id: noteIdVal
-      }).done(function (response) {
-        if (response && response.success) {
-          $noteId.val(noteIdVal);
-          $saveBtn.text('Update Work Note');
+        $.post(window.mainwpWorkNotes.ajax_url, {
+          action: 'load_work_note',
+          nonce: window.mainwpWorkNotes.nonce,
+          wpid: wpid,
+          note_id: noteIdVal
+        }).done(function (response) {
+          if (response && response.success) {
+            $noteId.val(noteIdVal);
+            $saveBtn.text('Update Work Note');
 
-          // Date
-          setDateInput(response.data.date, true);
+            // Date
+            setDateInput(response.data.date, true);
 
-          // Content
-          setEditorContent(response.data.content);
+            // Content
+            setEditorContent(response.data.content);
 
-          fixDatePicker();
-        } else {
-          alert(response && response.data ? response.data.message : 'Failed to load the note.');
-        }
-      }).fail(function () {
-        alert('Failed to load the note.');
+            fixDatePicker();
+          } else {
+            alert(
+              response && response.data
+                ? response.data.message
+                : 'Failed to load the note.'
+            );
+          }
+        }).fail(function () {
+          alert('Failed to load the note.');
+        });
       });
-    });
 
     // DELETE note
-    $(document).off('click', '.delete-note').on('click', '.delete-note', function () {
-      if (!window.confirm('Are you sure you want to delete this note?')) return;
-
-      const noteIdVal = $(this).data('note-id');
-      const wpid = $siteId.val();
-
-      $.post(window.mainwpWorkNotes.ajax_url, {
-        action: 'delete_work_note',
-        nonce: window.mainwpWorkNotes.nonce,
-        wpid: wpid,
-        note_id: noteIdVal
-      }).done(function (response) {
-        if (response && response.success) {
-          alert(response.data.message || 'Note deleted.');
-          reloadNotesTable(wpid);
-          resetForm();
-        } else {
-          alert(response && response.data ? response.data.message : 'Failed to delete the note.');
+    $(document)
+      .off('click', '.delete-note')
+      .on('click', '.delete-note', function () {
+        if (!window.confirm('Are you sure you want to delete this note?')) {
+          return;
         }
-      }).fail(function () {
-        alert('Failed to delete the note.');
+
+        const noteIdVal = $(this).data('note-id');
+        const wpid = $siteId.val();
+
+        $.post(window.mainwpWorkNotes.ajax_url, {
+          action: 'delete_work_note',
+          nonce: window.mainwpWorkNotes.nonce,
+          wpid: wpid,
+          note_id: noteIdVal
+        }).done(function (response) {
+          if (response && response.success) {
+            alert(response.data.message || 'Note deleted.');
+            reloadNotesTable(wpid);
+            resetForm();
+          } else {
+            alert(
+              response && response.data
+                ? response.data.message
+                : 'Failed to delete the note.'
+            );
+          }
+        }).fail(function () {
+          alert('Failed to delete the note.');
+        });
       });
-    });
   }
 
   // SAVE / UPDATE
   $saveBtn.off('click').on('click', function () {
     const noteIdVal = $noteId.val();
     const wpid = $siteId.val();
+
     // Gate Manual Entry
     let dateVal = $date.val();
+
     if (
-	  window.workNotesFlatpickrInstance &&
-	  typeof window.workNotesFlatpickrInstance.setDate === 'function'
-	) {
+      window.workNotesFlatpickrInstance &&
+      typeof window.workNotesFlatpickrInstance.setDate === 'function'
+    ) {
       const fp = window.workNotesFlatpickrInstance;
 
       // Prefer the selected date if present
       if (fp.selectedDates && fp.selectedDates[0]) {
         dateVal = fp.formatDate(fp.selectedDates[0], 'Y-m-d');
       } else if (fp.altInput && fp.altInput.value) {
-        // If user typed into the alt input, parse it using altFormat
-        const parsed = fp.parseDate(fp.altInput.value, fp.config.altFormat);
+        // If user typed into the alt input,
+        // parse it using altFormat
+        const parsed = fp.parseDate(
+          fp.altInput.value,
+          fp.config.altFormat
+        );
+
         if (parsed) {
           dateVal = fp.formatDate(parsed, 'Y-m-d');
         }
       }
     }
+
     const content = getEditorContent();
 
     $.post(window.mainwpWorkNotes.ajax_url, {
@@ -166,7 +213,11 @@ jQuery(document).ready(function ($) {
         reloadNotesTable(wpid);
         resetForm();
       } else {
-        alert(response && response.data ? response.data.message : 'Failed to save the note.');
+        alert(
+          response && response.data
+            ? response.data.message
+            : 'Failed to save the note.'
+        );
       }
     }).fail(function () {
       alert('Failed to save the note.');
@@ -176,25 +227,42 @@ jQuery(document).ready(function ($) {
   // ---- Init Flatpickr if present
   if (typeof window.flatpickr !== 'undefined') {
     window.workNotesFlatpickrInstance = flatpickr('#work_notes_date', {
-    dateFormat: 'Y-m-d',
-    altInput: true,
-    altFormat: (window.mainwpWorkNotes && mainwpWorkNotes.date_format) || 'd/m/Y',
-    defaultDate: $date.val() || (window.mainwpWorkNotes && mainwpWorkNotes.today) || null,
-    allowInput: true,
-    onChange: function (selectedDates, _str, inst) {
-      if (selectedDates[0]) {
-        $date.val(inst.formatDate(selectedDates[0], 'Y-m-d')).trigger('change');
-      }
-    },
-    onClose: function (_selectedDates, _str, inst) {
-      if (inst.altInput && inst.altInput.value) {
-        const parsed = inst.parseDate(inst.altInput.value, inst.config.altFormat);
-        if (parsed) {
-          $date.val(inst.formatDate(parsed, 'Y-m-d')).trigger('change');
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: (
+        window.mainwpWorkNotes &&
+        mainwpWorkNotes.date_format
+      ) || 'd/m/Y',
+      defaultDate: (
+        $date.val() ||
+        (window.mainwpWorkNotes && mainwpWorkNotes.today) ||
+        null
+      ),
+      allowInput: true,
+
+      onChange: function (selectedDates, _str, inst) {
+        if (selectedDates[0]) {
+          $date
+            .val(inst.formatDate(selectedDates[0], 'Y-m-d'))
+            .trigger('change');
+        }
+      },
+
+      onClose: function (_selectedDates, _str, inst) {
+        if (inst.altInput && inst.altInput.value) {
+          const parsed = inst.parseDate(
+            inst.altInput.value,
+            inst.config.altFormat
+          );
+
+          if (parsed) {
+            $date
+              .val(inst.formatDate(parsed, 'Y-m-d'))
+              .trigger('change');
+          }
         }
       }
-    }
-  });
+    });
   }
 
   // ---- Kick things off

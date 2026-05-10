@@ -249,26 +249,48 @@ class MainWP_Work_Notes {
      * Only needed on the individual site Work Notes page:
      * /wp-admin/admin.php?page=ManageSitesWorkNotes&id=XXXX
      */
-    public static function enqueue_assets() {
-        $page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
-        $id   = isset($_GET['id']) ? absint($_GET['id']) : 0;
+     public static function enqueue_assets() {
+	    $page_raw = isset($_GET['page']) ? wp_unslash($_GET['page']) : '';
+	    $page     = sanitize_text_field($page_raw);
+	    $id       = isset($_GET['id']) ? absint($_GET['id']) : 0;
 
-        if ($page !== 'ManageSitesWorkNotes' || $id <= 0) {
-            return;
-        }
+	    if ($id <= 0 || stripos($page, 'WorkNotes') === false) {
+	        return;
+	    }
 
-        wp_enqueue_editor();
-        wp_enqueue_style('flatpickr-css', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css');
-        wp_enqueue_script('flatpickr-js', 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js', [], null, true);
-        wp_enqueue_script('mainwp-work-notes-js', plugins_url('mainwp-work-notes.js', __FILE__), ['jquery', 'flatpickr-js'], null, true);
-        wp_localize_script('mainwp-work-notes-js', 'mainwpWorkNotes', [
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('work_notes_nonce'),
-            'date_format' => self::get_js_date_format(),
-            'today' => current_time('Y-m-d')
+	    wp_enqueue_editor();
 
-        ]);
-    }
+	    wp_enqueue_style(
+	        'flatpickr-css',
+	        'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
+	        [],
+	        null
+	    );
+
+	    wp_enqueue_script(
+	        'flatpickr-js',
+	        'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js',
+	        [],
+	        null,
+	        true
+	    );
+
+	    wp_enqueue_script(
+	        'mainwp-work-notes-js',
+	        plugins_url('mainwp-work-notes.js', __FILE__),
+	        ['jquery', 'flatpickr-js'],
+	        null,
+	        true
+	    );
+
+	    wp_localize_script('mainwp-work-notes-js', 'mainwpWorkNotes', [
+	        'ajax_url'    => admin_url('admin-ajax.php'),
+	        'nonce'       => wp_create_nonce('work_notes_nonce'),
+	        'date_format' => self::get_js_date_format(),
+	        'today'       => current_time('Y-m-d'),
+	    ]);
+	}
+
 
     /**
      * Convert WP date format to Flatpickr-compatible format.
