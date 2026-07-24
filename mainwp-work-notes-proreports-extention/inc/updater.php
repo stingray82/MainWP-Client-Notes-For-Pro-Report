@@ -391,7 +391,7 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 
 	class Updater_V2 {
 
-		const VERSION = '2.0.0-beta.1';
+		const VERSION = '2.0.0';
 
 		/** @var array Configuration settings */
 		private $config;
