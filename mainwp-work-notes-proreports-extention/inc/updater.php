@@ -1,6 +1,6 @@
 <?php
 /**
- * Universal Updater Drop-In (UUPD) 2.0 for Plugins & Themes
+ * Universal Updater Drop-In (UUPD) 2.1 for Plugins & Themes
  * =========================================================
  *
  * A lightweight, self-contained WordPress updater supporting both
@@ -23,6 +23,7 @@
  * ✔ Pre-release (alpha/beta/RC/dev) handling
  * ✔ Optional branding (icons, banners, screenshots)
  * ✔ Vendor + slug scoped filters and cache keys
+ * ✔ Optional Ed25519-signed metadata + authenticated package SHA-256 verification
  *
  * Safe to include multiple times, as long as namespace/class naming is isolated
  * when bundling separate copies.
@@ -138,6 +139,12 @@
  *   banners            Optional banners array
  *   screenshots        Optional screenshots array
  *   screenshot         Optional single screenshot URL
+ *   signed_updates     Optional bool. Verify signed metadata + package SHA-256. Default false.
+ *   signing_public_key Optional Ed25519 public key (base64, hex, or raw 32-byte key).
+ *   signing_key_id     Optional expected key identifier for safe key rotation.
+ *
+ * Signed update verification currently applies to JSON/static metadata mode.
+ * GitHub Releases API mode remains unchanged for backward compatibility.
  *
  * ───────────────────────── Filter Hierarchy ─────────────────────────
  *
@@ -188,6 +195,9 @@
  *   uupd/github_token_override
  *   uupd/github_token_override/<vendor>
  *   uupd/github_token_override/<vendor>/<slug>
+ *   uupd/signing_public_key
+ *   uupd/signing_public_key/<vendor>
+ *   uupd/signing_public_key/<vendor>/<slug>
  *   uupd/icons
  *   uupd/icons/<vendor>
  *   uupd/icons/<vendor>/<slug>
@@ -212,6 +222,12 @@
  *   uupd/allow_prerelease
  *   uupd/allow_prerelease/<vendor>
  *   uupd/allow_prerelease/<vendor>/<slug>
+ *   uupd/request_params
+ *   uupd/request_params/<vendor>
+ *   uupd/request_params/<vendor>/<slug>
+ *   uupd/request_headers
+ *   uupd/request_headers/<vendor>
+ *   uupd/request_headers/<vendor>/<slug>
  *   uupd/remote_url
  *   uupd/remote_url/<vendor>
  *   uupd/remote_url/<vendor>/<slug>
@@ -391,7 +407,7 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 
 	class Updater_V2 {
 
-		const VERSION = '2.0.0';
+		const VERSION = '2.1.0';
 
 		/** @var array Configuration settings */
 		private $config;
@@ -502,6 +518,9 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 		 *   @type array  $banners           Optional banners array.
 		 *   @type array  $screenshots       Optional screenshots array.
 		 *   @type string $screenshot        Optional single screenshot URL.
+		 *   @type bool   $signed_updates    Optional signed-update verification. Default false.
+		 *   @type string $signing_public_key Optional Ed25519 public key (base64, hex, or raw).
+		 *   @type string $signing_key_id    Optional expected key identifier.
 		 * }
 		 */
 		public function __construct( array $config ) {
@@ -544,6 +563,17 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 				$config['slug']
 			);
 
+			// 2.1 signed updates are strictly opt-in. When disabled, the legacy path is unchanged.
+			$config['signed_updates'] = ! empty( $config['signed_updates'] );
+			if ( $config['signed_updates'] ) {
+				$config['signing_public_key'] = self::apply_filters_scoped(
+					'uupd/signing_public_key',
+					$config['signing_public_key'] ?? '',
+					$config['vendor'],
+					$config['slug']
+				);
+			}
+
 			$this->config = $config;
 			$this->log( '✓ Using Updater_V2 version ' . self::VERSION );
 			$this->register_hooks();
@@ -581,6 +611,11 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 
 			// Add GitHub auth headers when WP downloads metadata or zip packages.
 			add_filter( 'http_request_args', [ $this, 'filter_http_request_args' ], 10, 2 );
+
+			// Only add the package verification interception when signed updates are enabled.
+			if ( ! empty( $this->config['signed_updates'] ) ) {
+				add_filter( 'upgrader_pre_download', [ $this, 'verify_signed_package_download' ], 10, 4 );
+			}
 		}
 
 		/**
@@ -660,6 +695,134 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 
 
 
+		/** Whether signed-update verification is enabled for this registration. */
+		private function signed_updates_enabled() {
+			return ! empty( $this->config['signed_updates'] );
+		}
+
+		/** Decode an Ed25519 public key supplied as base64, hex, or raw 32-byte data. */
+		private function decode_signing_public_key( $key ) {
+			$key = trim( (string) $key );
+			if ( $key === '' ) {
+				return false;
+			}
+
+			if ( strlen( $key ) === 64 && ctype_xdigit( $key ) ) {
+				$decoded = hex2bin( $key );
+			} else {
+				$decoded = base64_decode( $key, true );
+				if ( false === $decoded ) {
+					$decoded = $key;
+				}
+			}
+
+			return strlen( $decoded ) === 32 ? $decoded : false;
+		}
+
+		/**
+		 * Verify and unwrap a signed metadata envelope.
+		 *
+		 * Wire format when signed_updates=true:
+		 * {
+		 *   "alg": "ed25519",
+		 *   "key_id": "release-2026",              // optional
+		 *   "signed": "<base64 exact JSON payload>",
+		 *   "signature": "<base64 Ed25519 signature>"
+		 * }
+		 *
+		 * The private key never belongs in UUPD or the distributed plugin/theme.
+		 */
+		private function verify_signed_metadata_envelope( $body ) {
+			if ( ! $this->signed_updates_enabled() ) {
+				return json_decode( $body );
+			}
+
+			if ( ! function_exists( 'sodium_crypto_sign_verify_detached' ) ) {
+				return new \WP_Error( 'uupd_signing_unavailable', 'Signed updates require PHP sodium/Ed25519 support.' );
+			}
+
+			$envelope = json_decode( $body );
+			if ( ! is_object( $envelope ) || empty( $envelope->signed ) || empty( $envelope->signature ) ) {
+				return new \WP_Error( 'uupd_invalid_signature_envelope', 'Signed updates are enabled, but the metadata response is not a valid signed envelope.' );
+			}
+
+			$alg = strtolower( (string) ( $envelope->alg ?? 'ed25519' ) );
+			if ( $alg !== 'ed25519' ) {
+				return new \WP_Error( 'uupd_unsupported_signature_algorithm', 'Unsupported UUPD signature algorithm.' );
+			}
+
+			$expected_key_id = trim( (string) ( $this->config['signing_key_id'] ?? '' ) );
+			$actual_key_id   = trim( (string) ( $envelope->key_id ?? '' ) );
+			if ( $expected_key_id !== '' && ! hash_equals( $expected_key_id, $actual_key_id ) ) {
+				return new \WP_Error( 'uupd_signing_key_id_mismatch', 'Signed metadata key_id does not match the configured signing_key_id.' );
+			}
+
+			$public_key = $this->decode_signing_public_key( $this->config['signing_public_key'] ?? '' );
+			if ( false === $public_key ) {
+				return new \WP_Error( 'uupd_invalid_public_key', 'signed_updates is enabled but signing_public_key is missing or invalid.' );
+			}
+
+			$payload   = base64_decode( (string) $envelope->signed, true );
+			$signature = base64_decode( (string) $envelope->signature, true );
+			if ( false === $payload || false === $signature || strlen( $signature ) !== SODIUM_CRYPTO_SIGN_BYTES ) {
+				return new \WP_Error( 'uupd_invalid_signature_encoding', 'Signed metadata payload/signature encoding is invalid.' );
+			}
+
+			if ( ! sodium_crypto_sign_verify_detached( $signature, $payload, $public_key ) ) {
+				return new \WP_Error( 'uupd_signature_verification_failed', 'UUPD metadata signature verification failed.' );
+			}
+
+			$meta = json_decode( $payload );
+			if ( ! is_object( $meta ) ) {
+				return new \WP_Error( 'uupd_invalid_signed_payload', 'The signed metadata payload is not valid JSON metadata.' );
+			}
+
+			if ( empty( $meta->package_sha256 ) || ! preg_match( '/^[a-f0-9]{64}$/i', (string) $meta->package_sha256 ) ) {
+				return new \WP_Error( 'uupd_missing_package_hash', 'Signed metadata must contain a valid package_sha256 value.' );
+			}
+
+			return $meta;
+		}
+
+		/**
+		 * Intercept WordPress package download only for this updater's signed package,
+		 * verify SHA-256 from authenticated metadata, and return the verified temp file.
+		 */
+		public function verify_signed_package_download( $reply, $package, $upgrader, $hook_extra ) {
+			if ( ! $this->signed_updates_enabled() || false !== $reply ) {
+				return $reply;
+			}
+
+			$meta = get_transient( $this->get_metadata_cache_key() );
+			if ( ! is_object( $meta ) || empty( $meta->package_sha256 ) ) {
+				return $reply;
+			}
+
+			$expected_url = $this->resolve_download_url( $meta );
+			if ( $expected_url === '' || (string) $package !== (string) $expected_url ) {
+				return $reply;
+			}
+
+			if ( ! function_exists( 'download_url' ) ) {
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+			}
+
+			$tmp = download_url( $package, 300 );
+			if ( is_wp_error( $tmp ) ) {
+				return $tmp;
+			}
+
+			$actual = hash_file( 'sha256', $tmp );
+			$expect = strtolower( (string) $meta->package_sha256 );
+			if ( ! is_string( $actual ) || ! hash_equals( $expect, strtolower( $actual ) ) ) {
+				@unlink( $tmp );
+				return new \WP_Error( 'uupd_package_hash_mismatch', 'UUPD blocked the update: downloaded package SHA-256 does not match signed metadata.' );
+			}
+
+			$this->log( '✓ Signed package SHA-256 verified.' );
+			return $tmp;
+		}
+
 		/** Fetch metadata JSON from remote server and cache it. */
 		private function fetch_remote() {
 			$c          = $this->config;
@@ -681,22 +844,41 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 				return;
 			}
 
-			$slug_qs = rawurlencode( $slug_plain );
-			$key_qs  = rawurlencode( isset( $c['key'] ) ? $c['key'] : '' );
-			$host_qs = rawurlencode( wp_parse_url( untrailingslashit( home_url() ), PHP_URL_HOST ) );
-
 			$is_json = self::ends_with( $c['server'], '.json' );
 
 			if ( $is_json ) {
+				// Static JSON endpoints are intentionally used exactly as configured.
+				// Request parameter filters apply only to dynamic metadata-server requests.
 				$url = $c['server'];
 			} else {
-				$separator = strpos( $c['server'], '?' ) === false ? '?' : '&';
-				$allow_prerelease_qs = ! empty( $c['allow_prerelease'] ) ? '1' : '0';
-				$release_channel_qs  = rawurlencode( $this->get_release_channel() );
+				$request_params = [
+					'action'            => 'get_metadata',
+					'slug'              => $slug_plain,
+					'installed_version' => isset( $c['version'] ) ? (string) $c['version'] : '',
+					'key'               => isset( $c['key'] ) ? (string) $c['key'] : '',
+					'domain'            => wp_parse_url( untrailingslashit( home_url() ), PHP_URL_HOST ),
+					'allow_prerelease'  => ! empty( $c['allow_prerelease'] ) ? '1' : '0',
+					'release_channel'   => $this->get_release_channel(),
+				];
 
-				$url = untrailingslashit( $c['server'] ) . $separator . "action=get_metadata&slug={$slug_qs}&key={$key_qs}&domain={$host_qs}&allow_prerelease={$allow_prerelease_qs}&release_channel={$release_channel_qs}";
+				/**
+				 * Allow integrations to add, replace, or remove dynamic metadata query parameters.
+				 *
+				 * Examples include a public key, site identifier, licence tier, or other
+				 * server-specific values that UUPD itself does not need to understand.
+				 *
+				 * Filters are applied at the normal UUPD scopes:
+				 *   uupd/request_params
+				 *   uupd/request_params/<vendor>
+				 *   uupd/request_params/<vendor>/<slug>
+				 */
+				$request_params = self::apply_filters_scoped( 'uupd/request_params', $request_params, $vendor, $slug_plain );
+				$request_params = is_array( $request_params ) ? $request_params : [];
+
+				$url = add_query_arg( $request_params, untrailingslashit( $c['server'] ) );
 			}
 
+			// Keep remote_url as the final URL-level escape hatch for backwards compatibility.
 			$url = self::apply_filters_scoped( 'uupd/remote_url', $url, $vendor, $slug_plain );
 
 			$failure_cache_key = $this->get_metadata_cache_key() . '_error';
@@ -706,11 +888,29 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 			do_action( "uupd/before_fetch_remote/{$vendor}/{$slug_plain}", $c );
 			$this->log( "→ Triggered action: uupd/before_fetch_remote for '{$slug_plain}'" );
 
+			$request_headers = [
+				'Accept' => 'application/json',
+			];
+
+			/**
+			 * Allow integrations to add or override metadata request headers.
+			 *
+			 * This is the preferred extension point for credentials or other values
+			 * that should not be exposed in URLs or routine URL logging.
+			 *
+			 * Filters are applied at the normal UUPD scopes:
+			 *   uupd/request_headers
+			 *   uupd/request_headers/<vendor>
+			 *   uupd/request_headers/<vendor>/<slug>
+			 */
+			$request_headers = self::apply_filters_scoped( 'uupd/request_headers', $request_headers, $vendor, $slug_plain );
+			$request_headers = is_array( $request_headers ) ? $request_headers : [];
+
 			$resp = wp_remote_get(
 				$url,
 				[
 					'timeout' => 15,
-					'headers' => [ 'Accept' => 'application/json' ],
+					'headers' => $request_headers,
 				]
 			);
 
@@ -748,7 +948,22 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 				return;
 			}
 
-			$meta = json_decode( $body );
+			$meta = $this->verify_signed_metadata_envelope( $body );
+			if ( is_wp_error( $meta ) ) {
+				$this->log( ' Signature verification failed: ' . $meta->get_error_message() );
+				$ttl = self::apply_filters_scoped( 'uupd_fetch_remote_error_ttl', 6 * HOUR_IN_SECONDS, $vendor, $slug_plain );
+				set_transient( $failure_cache_key, time(), $ttl );
+
+				self::do_metadata_failure_actions( $vendor, $slug_plain, [
+					'vendor'  => $vendor,
+					'slug'    => $slug_plain,
+					'server'  => $c['server'],
+					'code'    => 200,
+					'message' => $meta->get_error_message(),
+				] );
+				return;
+			}
+
 			if ( ! $meta ) {
 				$this->log( ' JSON decode failed — caching error state' );
 				$ttl = self::apply_filters_scoped( 'uupd_fetch_remote_error_ttl', 6 * HOUR_IN_SECONDS, $vendor, $slug_plain );
@@ -903,6 +1118,11 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 			}
 
 			if ( false === $meta ) {
+				if ( $this->signed_updates_enabled() && $this->should_use_github_release_mode() ) {
+					$this->log( 'Signed updates require JSON/static metadata mode; refusing unsigned GitHub Releases metadata.' );
+					return $trans;
+				}
+
 				if ( $this->should_use_github_release_mode() ) {
 					$repo_url  = rtrim( $c['server'], '/' );
 					$cache_key = 'uupd_github_release_' . ( $c['instance_key'] ?? self::build_instance_key( $vendor, $slug ) ) . '_' . md5( $repo_url );
@@ -1092,6 +1312,11 @@ if ( ! class_exists( __NAMESPACE__ . '\Updater_V2' ) ) {
 			}
 
 			if ( false === $meta ) {
+				if ( $this->signed_updates_enabled() && $this->should_use_github_release_mode() ) {
+					$this->log( 'Signed updates require JSON/static metadata mode; refusing unsigned GitHub Releases metadata.' );
+					return $trans;
+				}
+
 				if ( $this->should_use_github_release_mode() ) {
 					$repo_url  = rtrim( $c['server'], '/' );
 					$cache_key = 'uupd_github_release_' . ( $c['instance_key'] ?? self::build_instance_key( $vendor, $c['slug'] ) ) . '_' . md5( $repo_url );
